@@ -11,7 +11,7 @@ export default defineConfig({
     ["json", { outputFile: "playwright-report/report.json" }],
   ],
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: "http://localhost:8787",
     trace: "on-first-retry",
   },
   projects: [
@@ -29,8 +29,13 @@ export default defineConfig({
     // },
   ],
   webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
+    // The real-time hub (/api/events) lives in the EventHub Durable Object,
+    // which only runs under the Workers runtime — not `next dev`. So e2e builds
+    // and serves with OpenNext. NEXT_PUBLIC_E2E exposes the debug stores the
+    // multi-user sync specs read.
+    command: "NEXT_PUBLIC_E2E=true npm run preview",
+    url: "http://localhost:8787",
+    timeout: 180_000,
     reuseExistingServer: !process.env["CI"],
     stdout: "pipe",
     stderr: "pipe",

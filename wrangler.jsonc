@@ -14,6 +14,7 @@
   "observability": {
     "enabled": true,
   },
+  "routes": [{ "pattern": "planeo.tre.systems", "custom_domain": true }],
   // Non-secret world config. Secrets (GOOGLE_AI_API_KEY, GOOGLE_APP_CREDS_JSON)
   // are set with `wrangler secret put` (or .dev.vars locally).
   "vars": {

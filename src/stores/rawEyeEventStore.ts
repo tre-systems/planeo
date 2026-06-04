@@ -52,6 +52,10 @@ export const useRawEyeEventStore = create<
   })),
 );
 
-if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+if (
+  typeof window !== "undefined" &&
+  (process.env.NODE_ENV !== "production" ||
+    process.env["NEXT_PUBLIC_E2E"] === "true")
+) {
   window.__rawEyeEventStore = useRawEyeEventStore;
 }

@@ -65,10 +65,6 @@ test("original: has title and receives initial event data", async ({
   page,
   request,
 }) => {
-  page.on("console", (msg) =>
-    console.log(`BROWSER CONSOLE: ${msg.type()}: ${msg.text()}`),
-  );
-
   const postData = {
     type: "eyeUpdate",
     id: "test-eye",

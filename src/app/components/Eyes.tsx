@@ -1,8 +1,7 @@
 "use client";
 import { useFrame } from "@react-three/fiber";
 import { type RapierRigidBody } from "@react-three/rapier";
-import { useRef, useEffect } from "react";
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import { Vector3, Euler, Quaternion, Matrix4 } from "three";
 
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
@@ -10,7 +9,7 @@ import { useEyesStore, ManagedEye } from "@/stores/eyesStore";
 
 import { Eye } from "./Eye";
 
-export const Eyes = (/*{ myId }: { myId: string }*/) => {
+export const Eyes = () => {
   const refs = useRef<Record<string, React.RefObject<RapierRigidBody | null>>>(
     {},
   );
@@ -100,12 +99,12 @@ export const Eyes = (/*{ myId }: { myId: string }*/) => {
         }
       }
 
-      // Opacity updates still happen via material directly
+      // Opacity is driven on the shader material, not the rigid body.
       if (eyeData.material.uniforms["uOpacity"].value !== eyeData.opacity) {
         eyeData.material.uniforms["uOpacity"].value = eyeData.opacity;
       }
-      // Scale is not directly on RigidBody. This would need a different approach,
-      // e.g., scaling the mesh child of the RigidBody.
+      // eyeData.scale is intentionally not applied: a kinematic RigidBody has no
+      // scale, so the fade-in scale would have to live on a mesh child instead.
     }
   });
 

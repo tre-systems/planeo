@@ -30,7 +30,7 @@ export const ChatWindow = ({ myId }: ChatWindowProps) => {
       name: "User",
       text,
       timestamp: Date.now(),
-      type: "chatMessage" as const,
+      type: "chatMessage",
     };
 
     addMessage(newMessage);

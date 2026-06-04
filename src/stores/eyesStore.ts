@@ -12,7 +12,7 @@ import {
 } from "@/domain/eye";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
 
-const CONVERSATION_DISTANCE_THRESHOLD = 5; // Example threshold, adjust as needed
+const CONVERSATION_DISTANCE_THRESHOLD = 5;
 
 type EyesState = {
   managedEyes: Record<string, EyeState>;
@@ -25,8 +25,6 @@ type EyesActions = {
     baseShaderMaterial: ShaderMaterial,
   ) => void;
   updateEyeAnimations: (delta: number) => void;
-  removeEye: (id: string) => void;
-  setManyManagedEyes: (newEyes: Record<string, EyeState>) => void;
   updateAIAgentTarget: (
     agentId: string,
     targetPosition: Vector3,
@@ -84,12 +82,12 @@ export const useEyesStore = create<EyesState & EyesActions>()(
               scale: INITIAL_SCALE,
               status: "appearing" as EyeStatus,
               material: baseShaderMaterial.clone(),
-              conversationalTargetId: undefined, // Initialize with no target
+              conversationalTargetId: undefined,
             };
           }
         }
 
-        // Conversational logic
+        // Pair up nearby eyes so each gazes at a conversational partner.
         const eyeIds = Object.keys(state.managedEyes).filter(
           (id) => id !== myId,
         );
@@ -97,7 +95,7 @@ export const useEyesStore = create<EyesState & EyesActions>()(
           const eye1 = state.managedEyes[eyeIds[i]];
           if (!eye1 || eye1.status === "disappearing") continue;
 
-          // Clear previous conversational target if the target is gone or too far
+          // Drop the current partner if it left or drifted out of range.
           if (eye1.conversationalTargetId) {
             const targetEye = state.managedEyes[eye1.conversationalTargetId];
             if (
@@ -110,7 +108,8 @@ export const useEyesStore = create<EyesState & EyesActions>()(
             }
           }
 
-          // Find a new conversational target if not already in one
+          // Otherwise pick the first free, in-range eye as a new partner. The
+          // pairing is one-way here; the partner links back on its own pass.
           if (!eye1.conversationalTargetId) {
             for (let j = 0; j < eyeIds.length; j++) {
               if (i === j) continue;
@@ -120,15 +119,13 @@ export const useEyesStore = create<EyesState & EyesActions>()(
                 eye2.status === "disappearing" ||
                 eye2.conversationalTargetId
               )
-                continue; // Don't target an eye already in a conversation
+                continue;
 
               if (
                 eye1.position.distanceTo(eye2.position) <
                 CONVERSATION_DISTANCE_THRESHOLD
               ) {
                 eye1.conversationalTargetId = eye2.id;
-                // Optionally, make it a two-way conversation immediately, or let the other eye pick it up in its iteration.
-                // For simplicity, we'll let the other eye pick it up.
                 break;
               }
             }
@@ -157,16 +154,13 @@ export const useEyesStore = create<EyesState & EyesActions>()(
             changed = true;
           }
 
-          // Gaze at conversational target if one exists
+          // Gaze at the conversational partner's centre, or drop a partner that
+          // is gone or fading out.
           if (eye.conversationalTargetId) {
             const targetEye = state.managedEyes[eye.conversationalTargetId];
             if (targetEye && targetEye.status !== "disappearing") {
-              // Look at the center of the target eye.
-              // For pupil-specific targeting, we'd need pupil position within the eye.
-              // This is a simplification.
               eye.targetLookAt.copy(targetEye.position);
             } else {
-              // Target is gone or disappearing, clear it
               eye.conversationalTargetId = undefined;
             }
           }
@@ -207,16 +201,6 @@ export const useEyesStore = create<EyesState & EyesActions>()(
         }
       }),
 
-    removeEye: (id: string) =>
-      set((state) => {
-        delete state.managedEyes[id];
-      }),
-
-    setManyManagedEyes: (newEyes) =>
-      set((state) => {
-        state.managedEyes = newEyes;
-      }),
-
     updateAIAgentTarget: (agentId, targetPosition, targetLookAt) =>
       set((state) => {
         const eye = state.managedEyes[agentId];
@@ -229,7 +213,7 @@ export const useEyesStore = create<EyesState & EyesActions>()(
           }
           eye.targetPosition.copy(targetPosition);
           eye.targetLookAt.copy(targetLookAt);
-          eye.conversationalTargetId = undefined; // Clear conversational target
+          eye.conversationalTargetId = undefined;
         }
       }),
   })),

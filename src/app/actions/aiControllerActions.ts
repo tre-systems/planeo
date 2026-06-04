@@ -24,5 +24,5 @@ export const requestAiDecision = async (
   log.warn("ai.controller", "No decision returned; defaulting to no action", {
     agent: aiAgentId,
   });
-  return { type: "none" }; // Default to no action if something went wrong
+  return { type: "none" };
 };

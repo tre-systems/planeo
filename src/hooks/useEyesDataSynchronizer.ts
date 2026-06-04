@@ -1,14 +1,14 @@
 "use client";
 
-// import { useLoader } from "@react-three/fiber"; // REMOVED
 import { useEffect, useMemo, useState } from "react";
 import { TextureLoader, ShaderMaterial, Texture } from "three";
 
-import { EyeUpdateType } from "@/domain/event"; // Ensure this path is correct
+import { EyeUpdateType } from "@/domain/event";
+import { log } from "@/lib/log";
 import { useEyesStore } from "@/stores/eyesStore";
 import { useRawEyeEventStore } from "@/stores/rawEyeEventStore";
 
-// Copied from Eyes.tsx, consider moving to a shared location if used elsewhere
+// Shader/texture for the eye material; duplicated in Eyes.tsx.
 const EYE_TEXTURE_PATH = "/eye.jpg";
 
 const vertexShader = `
@@ -28,7 +28,7 @@ const fragmentShader = `
   void main() {
     vec2 uv = normalize(vNormal).xy * 0.5 + 0.5;
     vec3 color = texture2D(tex, uv).rgb;
-    if (vNormal.z < -0.85) color = vec3(0.777, 0.74, 0.74); // Iris color part
+    if (vNormal.z < -0.85) color = vec3(0.777, 0.74, 0.74); // iris
     gl_FragColor = vec4(color, uOpacity);
   }
 `;
@@ -45,12 +45,14 @@ export const useEyesDataSynchronizer = (myId: string) => {
       (texture) => {
         setEyeTexture(texture);
       },
-      undefined, // onProgress callback (optional)
+      undefined,
       (error) => {
-        console.error("An error happened loading the eye texture:", error);
+        log.error("eyes", "Failed to load eye texture", {
+          error: String(error),
+        });
       },
     );
-  }, []); // Empty dependency array, load once
+  }, []);
 
   const baseShaderMaterial = useMemo(() => {
     if (!eyeTexture) return null;
@@ -66,11 +68,8 @@ export const useEyesDataSynchronizer = (myId: string) => {
   }, [eyeTexture]);
 
   useEffect(() => {
-    if (!baseShaderMaterial) {
-      // Do not sync if the material isn't ready.
-      // This also implies eyeTexture hasn't loaded yet.
-      return;
-    }
+    // Material not ready (eye texture still loading) — nothing to sync yet.
+    if (!baseShaderMaterial) return;
 
     const transformedDataArray: EyeUpdateType[] = Object.entries(
       rawEyesData,
@@ -81,8 +80,7 @@ export const useEyesDataSynchronizer = (myId: string) => {
       l: data.l,
       t: data.t,
     }));
-    // syncEyes will be called even if transformedDataArray is empty,
-    // allowing eyesStore to clear out eyes if rawEyesData becomes empty.
+    // Sync even when empty so eyesStore clears eyes as rawEyesData empties.
     syncEyes(transformedDataArray, myId, baseShaderMaterial);
   }, [rawEyesData, myId, baseShaderMaterial, syncEyes]);
 };

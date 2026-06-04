@@ -3,20 +3,19 @@
 import Image from "next/image";
 import React from "react";
 
-import { getAIAgents } from "@/domain/aiAgent"; // To get display names or other info
+import { getAIAgents } from "@/domain/aiAgent";
 import { useAIVisionStore } from "@/stores/aiVisionStore";
 
-const MAX_AI_VIEWS = 2; // Display for the first two AIs
+const MAX_AI_VIEWS = 2;
 
 export const AIAgentViews = () => {
   const aiAgentViews = useAIVisionStore((state) => state.aiAgentViews);
-  const agents = getAIAgents().slice(0, MAX_AI_VIEWS); // Get first two agents
+  const agents = getAIAgents().slice(0, MAX_AI_VIEWS);
 
   if (agents.length === 0) {
     return null;
   }
 
-  // Styles adapted from AIVisionDisplay
   const styles: Record<string, React.CSSProperties> = {
     container: {
       position: "fixed",
@@ -24,29 +23,27 @@ export const AIAgentViews = () => {
       left: "10px",
       right: "10px",
       display: "flex",
-      // justifyContent: "space-between", // We'll handle positioning individually
-      zIndex: 1000, // Ensure it's on top
-      pointerEvents: "none", // Allow clicks to pass through
+      zIndex: 1000,
+      pointerEvents: "none", // let clicks fall through to the canvas behind
     },
     viewWrapper: {
-      // Individual wrapper for positioning
       position: "fixed",
       top: "10px",
-      width: "160px", // Half of CAPTURE_WIDTH
-      height: "100px", // Half of CAPTURE_HEIGHT
-      border: "1px solid lime", // Changed from white to lime
-      backgroundColor: "rgba(0, 0, 0, 0.7)", // Slightly more opaque
-      padding: "0px", // Changed from 2px to 0px
+      width: "160px", // half of CAPTURE_WIDTH (320)
+      height: "100px", // half of CAPTURE_HEIGHT (200)
+      border: "1px solid lime",
+      backgroundColor: "rgba(0, 0, 0, 0.7)",
+      padding: "0px",
       boxSizing: "border-box",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      justifyContent: "flex-start", // Changed from center to flex-start
+      justifyContent: "flex-start",
     },
     imageContainer: {
       width: "100%",
-      height: "calc(100% - 15px)", // Space for name label
-      position: "relative", // For Next/Image fill
+      height: "calc(100% - 15px)", // leave room for the name label below
+      position: "relative", // required for next/image fill
     },
     image: {
       objectFit: "contain",
@@ -62,7 +59,6 @@ export const AIAgentViews = () => {
       whiteSpace: "nowrap",
     },
     loadingText: {
-      // For loading state
       color: "white",
       fontSize: "10px",
       textAlign: "center",
@@ -97,7 +93,7 @@ export const AIAgentViews = () => {
                   alt={`View from ${displayName}`}
                   style={styles["image"]}
                   fill
-                  priority // Add priority prop
+                  priority
                 />
               ) : (
                 <p style={styles["loadingText"]}>

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Vector3 } from "three";
 
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
-import { roundVec3, areVec3sEqual, roundArray } from "@/lib/utils";
+import { roundVec3, areVec3sEqual } from "@/lib/utils";
 
 import type { EyeUpdateType } from "@/domain";
 import type { Camera } from "@react-three/fiber";
@@ -41,13 +41,14 @@ export const useEyePositionReporting = (
     const lookAtDirection = new Vector3();
     camera.getWorldDirection(lookAtDirection);
 
-    // If looking perfectly vertical, add a tiny horizontal offset for the initial payload
+    // Avoid a lookAt that is co-linear with position on XZ when looking
+    // straight up/down: nudge horizontally and re-normalize.
     if (
       Math.abs(lookAtDirection.x) < 0.001 &&
       Math.abs(lookAtDirection.z) < 0.001
     ) {
-      lookAtDirection.x = 0.01; // Small non-zero component
-      lookAtDirection.normalize(); // Keep it a unit vector
+      lookAtDirection.x = 0.01;
+      lookAtDirection.normalize();
     }
 
     const initialLookAtRaw: [number, number, number] = [
@@ -55,11 +56,7 @@ export const useEyePositionReporting = (
       camera.position.y + lookAtDirection.y,
       camera.position.z + lookAtDirection.z,
     ];
-    const initialLookAtRounded = roundArray(initialLookAtRaw) as [
-      number,
-      number,
-      number,
-    ];
+    const initialLookAtRounded = roundVec3(initialLookAtRaw);
 
     const initialPayload: EyeUpdateType = {
       type: "eyeUpdate",
@@ -85,13 +82,13 @@ export const useEyePositionReporting = (
       const currentLookAtDirection = new Vector3();
       camera.getWorldDirection(currentLookAtDirection);
 
-      // If looking perfectly vertical, add a tiny horizontal offset to ensure the lookAt point isn't co-linear (on XZ) with position
+      // Same straight-up/down guard as the initial payload above.
       if (
         Math.abs(currentLookAtDirection.x) < 0.001 &&
         Math.abs(currentLookAtDirection.z) < 0.001
       ) {
-        currentLookAtDirection.x = 0.01; // Small non-zero component
-        currentLookAtDirection.normalize(); // Keep it a unit vector for consistency if preferred
+        currentLookAtDirection.x = 0.01;
+        currentLookAtDirection.normalize();
       }
 
       const currentLookAtRaw: [number, number, number] = [
@@ -99,11 +96,7 @@ export const useEyePositionReporting = (
         camera.position.y + currentLookAtDirection.y,
         camera.position.z + currentLookAtDirection.z,
       ];
-      const currentLookAtRounded = roundArray(currentLookAtRaw) as [
-        number,
-        number,
-        number,
-      ];
+      const currentLookAtRounded = roundVec3(currentLookAtRaw);
 
       forcePositionUpdateCounterRef.current += 1;
 

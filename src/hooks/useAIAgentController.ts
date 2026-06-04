@@ -12,6 +12,7 @@ import {
 import { requestAiDecision } from "@/app/actions/aiControllerActions";
 import { getAIAgents } from "@/domain/aiAgent";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
+import { log } from "@/lib/log";
 import { roundArray } from "@/lib/utils";
 import { useAIVisionStore } from "@/stores/aiVisionStore";
 import { useCommunicationStore } from "@/stores/communicationStore";
@@ -28,7 +29,7 @@ const VISUAL_UPDATE_INTERVAL_MS = 100; // For smoother view updates (~10 FPS)
 const DECISION_MAKING_INTERVAL_MS = 5000;
 const CAPTURE_WIDTH = 320;
 const CAPTURE_HEIGHT = 200;
-const MOVEMENT_DISTANCE_MULTIPLIER = 10; // New multiplier
+const MOVEMENT_DISTANCE_MULTIPLIER = 10;
 
 export const useAIAgentController = (myId: string) => {
   const { gl, scene: mainScene } = useThree();
@@ -92,9 +93,9 @@ export const useAIAgentController = (myId: string) => {
       const aiRenderTarget = aiRenderTargetRefs.current[agentId];
 
       if (!agentState || !aiCamera || !aiRenderTarget) {
-        console.warn(
-          `[AI Controller] Missing state/camera/target for ${agentId} during image extraction`,
-        );
+        log.warn("ai.controller", "Missing render state for extraction", {
+          agentId,
+        });
         return null;
       }
 
@@ -170,17 +171,16 @@ export const useAIAgentController = (myId: string) => {
       try {
         const imageDataUrl = extractImageDataFromRenderer(agentId);
         if (!imageDataUrl) {
-          console.warn(
-            `[AI Controller] Could not get image data for ${agentId} decision.`,
-          );
+          log.warn("ai.controller", "No image data for decision", { agentId });
           return;
         }
 
         const chatHistory = getMessages.slice(-10);
 
-        console.log(
-          `[AI Controller] Requesting decision for ${agentId} with image data (length: ${imageDataUrl.length})`,
-        );
+        log.debug("ai.controller", "Requesting decision", {
+          agentId,
+          imageBytes: imageDataUrl.length,
+        });
         const movementAction: AIAction = await requestAiDecision(
           agentId,
           imageDataUrl,
@@ -188,10 +188,10 @@ export const useAIAgentController = (myId: string) => {
         );
 
         if (movementAction && movementAction.type !== "none") {
-          console.log(
-            `[AI Controller] Executing movement for ${agentId}:`,
-            movementAction,
-          );
+          log.debug("ai.controller", "Executing movement", {
+            agentId,
+            action: movementAction,
+          });
           const currentAIState = managedEyes[agentId];
           if (currentAIState) {
             const currentPosition = currentAIState.position.clone();
@@ -263,19 +263,19 @@ export const useAIAgentController = (myId: string) => {
                 body: JSON.stringify(eyeUpdatePayload),
                 keepalive: true,
               }).catch((err) =>
-                console.error(
-                  "[AI Controller] Fallback eyeUpdate fetch failed:",
-                  err,
-                ),
+                log.error("ai.controller", "Fallback eyeUpdate fetch failed", {
+                  agentId,
+                  error: String(err),
+                }),
               );
             }
           }
         }
       } catch (error) {
-        console.error(
-          `[AI Controller] Error processing agent decision ${agentId}:`,
-          error,
-        );
+        log.error("ai.controller", "Error processing agent decision", {
+          agentId,
+          error: String(error),
+        });
       } finally {
         lastDecisionTime.current[agentId] = Date.now();
         decisionProcessingLock.current.delete(agentId);

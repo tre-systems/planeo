@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 
 import { generateAiChatMessage } from "@/app/actions/generateMessage";
 import { getAIAgents, isAIAgentId } from "@/domain/aiAgent";
+import { log } from "@/lib/log";
 import { useCommunicationStore } from "@/stores/communicationStore";
 
 export const useAiChat = (myId: string) => {
@@ -12,11 +13,8 @@ export const useAiChat = (myId: string) => {
 
   useEffect(() => {
     const agents = getAIAgents();
-    if (agents.length === 0) {
-      // No AI agents configured, so nothing to do
-      return;
-    }
-    const respondingAgentId = agents[0].id; // First AI agent will respond
+    if (agents.length === 0) return; // no agents configured
+    const respondingAgentId = agents[0].id;
 
     if (messages.length === 0 || aiResponseInProgress.current) {
       return;
@@ -24,8 +22,7 @@ export const useAiChat = (myId: string) => {
 
     const lastMessage = messages[messages.length - 1];
 
-    // Don't respond if AI is already thinking
-    // Don't let AI respond to its own messages or other AI messages
+    // Never respond to an AI's own or another AI's message.
     if (isAIAgentId(lastMessage.userId)) {
       return;
     }
@@ -39,14 +36,16 @@ export const useAiChat = (myId: string) => {
 
     const timerId = setTimeout(
       async () => {
-        console.log(
-          `[AI Hook] Triggering AI response from agent: ${respondingAgentId}...`,
-        );
+        log.debug("ai.chat", "Triggering AI response", {
+          agentId: respondingAgentId,
+        });
         try {
           const currentChatHistory = [...messages];
           await generateAiChatMessage(currentChatHistory, respondingAgentId);
         } catch (error) {
-          console.error("[AI Hook] Error getting AI response:", error);
+          log.error("ai.chat", "Error getting AI response", {
+            error: String(error),
+          });
         } finally {
           aiResponseInProgress.current = false;
         }

@@ -67,18 +67,15 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
     throttledSendBoxUpdate: throttle(
       async (boxUpdate: ValidatedBoxUpdatePayloadType) => {
         if (!get().isConnected) {
-          console.warn(
-            "Attempted to send box update while not connected. Ignoring.",
-          );
+          log.warn("sse", "Box update skipped: not connected");
           return;
         }
 
         const parsedPayload = BoxUpdatePayloadSchema.safeParse(boxUpdate);
         if (!parsedPayload.success) {
-          console.error(
-            "Invalid box update payload before sending:",
-            parsedPayload.error.flatten(),
-          );
+          log.error("sse", "Invalid box update payload before sending", {
+            details: parsedPayload.error.flatten(),
+          });
           set({ lastError: "Invalid box update payload formation" });
           return;
         }
@@ -94,18 +91,18 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
 
           if (!response.ok) {
             const errorData = await response.text();
-            console.error(
-              "Failed to send box update to server:",
-              response.status,
-              errorData,
-            );
+            log.error("sse", "Failed to send box update to server", {
+              status: response.status,
+              body: errorData,
+            });
             set({
               lastError: `Server error sending box update: ${response.status}`,
             });
-          } else {
           }
         } catch (error) {
-          console.error("Network error sending box update:", error);
+          log.error("sse", "Network error sending box update", {
+            error: String(error),
+          });
           set({ lastError: "Network error sending box update" });
         }
       },
@@ -127,7 +124,6 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
     disconnect: () => {
       const es = get().eventSourceInstance;
       if (es) {
-        console.log("Disconnecting EventSource...");
         es.close();
         set({
           eventSourceInstance: null,
@@ -141,7 +137,7 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
         state.listeners.eyeUpdate.push(callback);
       });
 
-      // Dispatch current state from rawEyeEventStore to the new subscriber
+      // Replay current eye state from rawEyeEventStore to the new subscriber.
       const allCurrentEyeStates = useRawEyeEventStore.getState().eyes;
       const eyeEventsForDispatch: EyeUpdateType[] = Object.entries(
         allCurrentEyeStates,
@@ -150,18 +146,12 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
           type: "eyeUpdate" as const,
           id,
           ...data,
-          // name: undefined, // Explicitly undefined if not stored in rawEyeEventStore and EyeUpdateType allows optional name
         }))
-        // Filter out any events that might be incomplete if necessary, though spread handles missing p/l
-        .filter((event) => event.t); // Ensure timestamp exists, basic validation
+        .filter((event) => event.t);
 
       if (eyeEventsForDispatch.length > 0) {
         setTimeout(() => {
-          // Dispatch asynchronously
-          console.log(
-            `Dispatching ${eyeEventsForDispatch.length} existing eye events to new subscriber.`,
-          );
-          // Deep clone before dispatching to prevent accidental mutation of store state by subscribers
+          // Deep clone so a subscriber can't mutate the store's eye state.
           const clonedEvents = JSON.parse(
             JSON.stringify(eyeEventsForDispatch),
           ) as EyeUpdateType[];
@@ -211,18 +201,15 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
 
     sendChatMessage: async (message: ChatMessageEventType) => {
       if (!get().isConnected) {
-        console.warn(
-          "Attempted to send chat message while not connected. Ignoring.",
-        );
+        log.warn("sse", "Chat message skipped: not connected");
         return;
       }
 
       const parsedPayload = ChatMessageEventSchema.safeParse(message);
       if (!parsedPayload.success) {
-        console.error(
-          "Invalid chat message payload before sending:",
-          parsedPayload.error.flatten(),
-        );
+        log.error("sse", "Invalid chat message payload before sending", {
+          details: parsedPayload.error.flatten(),
+        });
         set({ lastError: "Invalid chat message payload formation" });
         return;
       }
@@ -238,18 +225,18 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
 
         if (!response.ok) {
           const errorData = await response.text();
-          console.error(
-            "Failed to send chat message to server:",
-            response.status,
-            errorData,
-          );
+          log.error("sse", "Failed to send chat message to server", {
+            status: response.status,
+            body: errorData,
+          });
           set({
             lastError: `Server error sending chat message: ${response.status}`,
           });
-        } else {
         }
       } catch (error) {
-        console.error("Network error sending chat message:", error);
+        log.error("sse", "Network error sending chat message", {
+          error: String(error),
+        });
         set({ lastError: "Network error sending chat message" });
       }
     },

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 
 import { synthesizeSpeechAction } from "@/app/actions/tts";
 import { getAIAgentById, isAIAgentId } from "@/domain/aiAgent";
+import { log } from "@/lib/log";
 
 import type { Message } from "@/domain/message";
 
@@ -46,7 +47,9 @@ export const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
         if (!isMounted) return;
 
         if (result.error) {
-          console.error("[ChatMessage TTS] Error from action:", result.error);
+          log.error("chat-tts", "Synthesis action returned error", {
+            error: result.error,
+          });
         } else if (result.audioBase64) {
           if (audioRef.current) {
             audioRef.current.pause();
@@ -57,8 +60,6 @@ export const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
           );
           audioRef.current = newAudio;
 
-          newAudio.onplaying = () => {};
-
           newAudio.onended = () => {
             if (isMounted && audioRef.current) {
               audioRef.current.src = "";
@@ -68,38 +69,39 @@ export const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
 
           newAudio.onerror = (e) => {
             if (isMounted) {
-              console.warn(
-                "[ChatMessage TTS] Audio playback error event (onerror):",
-                e,
-                "Audio element error object:",
-                audioRef.current?.error,
-              );
+              log.warn("chat-tts", "Audio playback error event", {
+                event: String(e),
+                mediaError: String(audioRef.current?.error),
+              });
             }
           };
 
           try {
             await newAudio.play();
           } catch (playError) {
+            // play() commonly rejects when the browser blocks autoplay.
             if (isMounted) {
-              console.warn(
-                "[ChatMessage TTS] Audio play() promise rejected (likely autoplay):",
-                playError,
-              );
+              log.warn("chat-tts", "Audio play() promise rejected", {
+                error: String(playError),
+              });
             }
           }
         } else {
           if (isMounted) {
-            console.warn("[ChatMessage TTS] No audio data received.");
+            log.warn("chat-tts", "No audio data received");
           }
         }
       } catch (e) {
         if (isMounted) {
-          console.error("[ChatMessage TTS] Failed to synthesize speech:", e);
+          log.error("chat-tts", "Failed to synthesize speech", {
+            error: String(e),
+          });
         }
       }
     };
 
-    if (ttsEnabled && message.id && !isMyMessage) {
+    // ttsEnabled and !isMyMessage are already guaranteed by the early return above.
+    if (message.id) {
       playAudio();
     }
 
@@ -107,7 +109,6 @@ export const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
       isMounted = false;
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.onplaying = null;
         audioRef.current.onended = null;
         audioRef.current.onerror = null;
         audioRef.current.src = "";

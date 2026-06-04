@@ -53,9 +53,8 @@ export const generateAiChatMessage = async (
   const agent = getAIAgentById(aiUserId);
   const agentName = agent?.displayName || aiUserId;
 
-  const historySlice = validated.data;
   const prompt =
-    historySlice
+    validated.data
       .map((msg) => {
         const senderName =
           msg.name ||
@@ -91,8 +90,6 @@ export const generateAiChatMessage = async (
   }
 };
 
-export type AgentAction = ParsedAIResponse["action"];
-
 export const generateAiActionAndChat = async (
   aiAgentId: string,
   imageDataUrl: string,
@@ -119,8 +116,6 @@ export const generateAiActionAndChat = async (
     return undefined;
   }
 
-  const historySlice = chatHistory;
-
   const systemPrompt = `You awaken with no prior memories of who you are or how you got here. 
   You feel lost, disoriented, scared and freaking out. 
   You are now trying to make sense of your surroundings and remember what you\'ve done recently. 
@@ -130,7 +125,7 @@ You are provided with an image of your current view.
 
 This is what has been said by you and others:
 Chat History (SenderName: MessageText):
-${historySlice
+${chatHistory
   .map((msg) => {
     const senderName =
       msg.name ||

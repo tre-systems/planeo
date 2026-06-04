@@ -1,24 +1,24 @@
 import { z } from "zod";
 
-import { Vec3Schema } from "./common"; // Changed import path
+import { Vec3Schema } from "./common";
 
 export const BoxSchema = z.object({
   type: z.literal("box"),
   id: z.string().min(1),
   p: Vec3Schema, // Position
-  o: Vec3Schema, // Orientation (as Euler angles or a quaternion represented as Vec3 for simplicity)
-  c: z.string(), // Color (e.g., hex string like "#FF0000")
+  o: Vec3Schema, // Orientation, as Euler angles
+  c: z.string(), // Color, hex string (e.g. "#FF0000")
   t: z.number(), // Timestamp of last update
 });
 export type BoxType = z.infer<typeof BoxSchema>;
 
-// Schema for the payload when a client sends a box update
+// The payload a client sends to update a box; the server stamps 't' on
+// receive/broadcast, so it is absent here.
 export const BoxUpdatePayloadSchema = z.object({
-  type: z.literal("boxUpdate"), // This will be the event type in the main EventSchema
+  type: z.literal("boxUpdate"),
   id: z.string().min(1),
   p: Vec3Schema.optional(),
   o: Vec3Schema.optional(),
-  // 't' (timestamp) will be added by the server upon receiving/broadcasting
 });
 export type BoxUpdatePayloadType = z.infer<typeof BoxUpdatePayloadSchema>;
 
@@ -34,8 +34,8 @@ export type ValidatedBoxUpdatePayloadType = z.infer<
   typeof ValidatedBoxUpdatePayloadSchema
 >;
 
-// This will be the actual event type that gets broadcasted via SSE
+// The box state broadcast to clients over SSE.
 export const BoxEventSchema = BoxSchema.extend({
-  type: z.literal("box"), // Overriding to 'box' as it's the specific event type for a box state
+  type: z.literal("box"),
 });
 export type BoxEventType = z.infer<typeof BoxEventSchema>;

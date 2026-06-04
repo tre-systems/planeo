@@ -7,21 +7,21 @@ import {
   type BoxEventType,
   type ValidatedBoxUpdatePayloadType,
 } from "@/domain";
+import { log } from "@/lib/log";
 
-enableMapSet(); // Enable Map and Set support for Immer
+enableMapSet(); // Immer needs this to mutate the boxes Map in place.
 
 export interface AnimatedBoxState {
   id: string;
-  // Current animated values
+  // Current animated values, lerped toward the server target each frame.
   currentP: Vector3;
-  currentO: Euler; // Using Three.js Euler for easier lerping
-  // Target values from server
+  currentO: Euler; // Euler (not Quaternion) so each axis lerps independently.
+  // Latest authoritative target from the server.
   targetP: Vector3;
   targetO: Euler;
-  // Other state
-  c: string; // Color
-  t: number; // Timestamp of last target update
-  isInitialized: boolean; // To handle initial snap
+  c: string;
+  t: number;
+  isInitialized: boolean;
 }
 
 interface BoxStoreState {
@@ -39,10 +39,7 @@ export const useBoxStore = create<BoxStoreState>()(
 
     handleBoxEvent: (boxData) => {
       if (!boxData || !boxData.p || !boxData.o || !boxData.c) {
-        console.warn(
-          "[Client boxStore] Received incomplete boxData, ignoring:",
-          boxData,
-        );
+        log.warn("box", "Ignoring incomplete box event", { boxData });
         return;
       }
 
@@ -78,8 +75,8 @@ export const useBoxStore = create<BoxStoreState>()(
 
     updateBoxAnimations: (delta, lerpFactor = DEFAULT_LERP_FACTOR) => {
       set((state) => {
-        // Adjust lerpFactor based on delta to aim for frame-rate independence
-        // This aims to achieve roughly the same visual speed as lerpFactor at 60FPS
+        // Scale by delta*60 so the visual speed matches `lerpFactor` at 60 FPS
+        // regardless of the actual frame rate.
         const adjustedLerpFactor = Math.min(lerpFactor * delta * 60, 1);
 
         for (const box of state.boxes.values()) {
@@ -117,7 +114,7 @@ export const useBoxStore = create<BoxStoreState>()(
             box.targetP.copy(newPos);
           }
           if (update.o) {
-            // Ensure Euler order is consistent, using existing order or default 'XYZ'
+            // Preserve the box's existing Euler order so copy() stays consistent.
             const newEuler = new Euler(
               update.o[0],
               update.o[1],
@@ -127,7 +124,7 @@ export const useBoxStore = create<BoxStoreState>()(
             box.currentO.copy(newEuler);
             box.targetO.copy(newEuler);
           }
-          box.t = Date.now(); // Update timestamp for this optimistic update
+          box.t = Date.now();
         }
       });
     },

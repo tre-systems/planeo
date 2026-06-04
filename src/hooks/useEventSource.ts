@@ -1,7 +1,6 @@
 "use client";
 import { useEffect } from "react";
 
-import { type BoxEventType } from "@/domain";
 import { useBoxStore } from "@/stores/boxStore";
 import { useCommunicationStore } from "@/stores/communicationStore";
 import { useEventStore } from "@/stores/eventStore";
@@ -39,11 +38,7 @@ export const useEventSource = (myId: string) => {
   }, [subscribeToChatMessageEvents, addMessage, myId]);
 
   useEffect(() => {
-    const handleBoxEvent = (event: BoxEventType) => {
-      handleBoxEventFromStore(event);
-    };
-
-    const unsubscribeBox = subscribeToBoxEvents(handleBoxEvent);
+    const unsubscribeBox = subscribeToBoxEvents(handleBoxEventFromStore);
     return () => unsubscribeBox();
   }, [subscribeToBoxEvents, handleBoxEventFromStore]);
 };

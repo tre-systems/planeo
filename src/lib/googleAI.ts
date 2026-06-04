@@ -5,12 +5,9 @@ import { GoogleGenAI, GenerationConfig } from "@google/genai";
 import { log } from "./log";
 import { retry } from "./retry";
 
-// Singleton client instance
 let genAIClient: GoogleGenAI | null = null;
 
-/**
- * Interface for Google AI errors, attempting to capture potential safety feedback.
- */
+// Shape of a Google AI error that may carry safety feedback we want to log.
 interface GoogleAIError extends Error {
   response?: {
     candidates?: Array<{
@@ -19,12 +16,7 @@ interface GoogleAIError extends Error {
   };
 }
 
-/**
- * Initializes and returns a singleton GoogleGenAI client.
- * Uses the GOOGLE_AI_API_KEY environment variable.
- * @returns {Promise<GoogleGenAI>} The initialized GoogleGenAI client.
- * @throws Will throw an error if initialization fails.
- */
+// Lazily creates and caches a single GoogleGenAI client from GOOGLE_AI_API_KEY.
 export const getGoogleAIClient = async (): Promise<GoogleGenAI> => {
   if (genAIClient) {
     return genAIClient;
@@ -39,50 +31,37 @@ export const getGoogleAIClient = async (): Promise<GoogleGenAI> => {
   return genAIClient;
 };
 
-/**
- * Retrieves the configuration for the active text generation model.
- * @returns {Promise<object>} Model configuration.
- */
-export const getActiveTextModel = async () => {
+// Config for the active text-generation model.
+const getActiveTextModel = async () => {
   return {
     provider: "google",
-    name: "gemini-2.0-flash-lite", // Updated from gemini-1.5-flash-latest to gemini-2.0-flash-lite
+    name: "gemini-2.0-flash-lite",
     displayName: "Gemini 2.0 Flash-Lite",
-    maxTokens: 500, // Example value, adjust as needed
+    maxTokens: 500,
   };
 };
 
-/**
- * Retrieves the configuration for the active vision-capable model.
- * @returns {Promise<object>} Model configuration.
- */
+// Config for the active vision-capable model.
 export const getActiveVisionModel = async () => {
   return {
     provider: "google",
-    name: "gemini-1.5-flash-latest", // Corrected to gemini-1.5-flash-latest
+    name: "gemini-1.5-flash-latest",
     displayName: "Gemini 1.5 Flash",
-    maxTokens: 500, // Example value, adjust as needed
+    maxTokens: 500,
   };
 };
 
-/**
- * Type for overriding parts of the AI generation configuration.
- */
-export type AIConfigOverrides = Partial<GenerationConfig>;
+type AIConfigOverrides = Partial<GenerationConfig>;
 
-/**
- * Calls a Google AI model for text completion based on a prompt.
- * @param {string} prompt - The input prompt for the AI.
- * @param {AIConfigOverrides} [configOverrides] - Optional overrides for the generation config.
- * @returns {Promise<string | undefined>} The AI-generated text, or undefined if an error occurs or no text is generated.
- */
+// Calls the text model for a completion, returning undefined on error or empty
+// output so callers can degrade gracefully.
 export const generateTextCompletion = async (
   prompt: string,
   configOverrides?: AIConfigOverrides,
 ): Promise<string | undefined> => {
   try {
     const genAI: GoogleGenAI = await getGoogleAIClient();
-    const textModelConfig = await getActiveTextModel(); // Using the specific text model
+    const textModelConfig = await getActiveTextModel();
 
     const baseConfig: GenerationConfig = {
       temperature: 0.5,
@@ -91,16 +70,16 @@ export const generateTextCompletion = async (
       frequencyPenalty: 0.3,
       presencePenalty: 0.6,
       candidateCount: 1,
-      maxOutputTokens: 150, // Default for general text, can be overridden
+      maxOutputTokens: 150,
     };
 
     const generationConfig = { ...baseConfig, ...configOverrides };
 
     const request = {
-      model: textModelConfig.name, // Use the dynamically fetched model name
+      model: textModelConfig.name,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig,
-      safetySettings: [], // Consider making safety settings configurable
+      safetySettings: [],
     };
 
     log.debug("ai.text", "Requesting completion");
@@ -122,6 +101,6 @@ export const generateTextCompletion = async (
       error: error instanceof Error ? error.message : String(error),
       safety: gError.response?.candidates?.[0]?.safetyRatings,
     });
-    return undefined; // Return undefined on error to allow graceful handling
+    return undefined;
   }
 };

@@ -11,6 +11,8 @@ This document describes how the running system fits together. For per-feature
 detail see [`docs/`](docs/); for known gaps and planned work see
 [`docs/BACKLOG.md`](docs/BACKLOG.md).
 
+![Planeo system overview](docs/diagrams/system-overview.png)
+
 ## The one thing that shapes everything: a single Durable Object authority
 
 All cross-client state lives in **one Durable Object**, the `EventHub` in
@@ -146,6 +148,8 @@ Rotation is yaw-only and the camera's Y is locked to `EYE_Y_POSITION` (-11.9).
 
 ## Real-time layer (SSE)
 
+![Planeo real-time data flow](docs/diagrams/realtime-data-flow.png)
+
 The [`EventHub`](src/server/eventHub.ts) Durable Object both holds the world
 state and serves the SSE endpoint. [`worker.ts`](worker.ts) is the Worker entry:
 it routes `/api/events` straight to the one DO stub (`idFromName("global")`) and
@@ -183,6 +187,8 @@ raw eye records into the animated `eyesStore` for rendering.
 | `boxUpdate`   | client → server | `id`, `p?`, `o?` (drives `setBox`)                         |
 
 ## AI agents
+
+![Planeo AI agent decision loop](docs/diagrams/ai-agent-loop.png)
 
 Agents default to **Orion** (`ai-agent-1`) and **Nova** (`ai-agent-2`), or
 whatever `AI_AGENTS_CONFIG` defines ([`src/domain/aiAgent.ts`](src/domain/aiAgent.ts)).
@@ -249,6 +255,20 @@ Disabled when `NEXT_PUBLIC_TTS_ENABLED` is exactly `"false"`.
 | `boxStore`           | Animated cube state (current/target position + orientation, color), lerped each frame.                                  |
 | `aiVisionStore`      | The latest agent-view thumbnails for the HUD.                                                                           |
 | `simulationStore`    | The single `isStarted` flag behind the start overlay.                                                                   |
+
+### Eye lifecycle
+
+Each eye (a user or agent) animates through a small state machine in `eyesStore`
+— fading in on arrival, fading out when its updates stop:
+
+```mermaid
+stateDiagram-v2
+    [*] --> appearing: syncEyes sees a new id
+    appearing --> visible: opacity reaches 1
+    visible --> disappearing: id missing from the latest sync
+    disappearing --> appearing: id reappears
+    disappearing --> [*]: opacity reaches 0 (removed)
+```
 
 ## Domain schemas
 

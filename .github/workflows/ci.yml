@@ -23,7 +23,9 @@ jobs:
           node-version: 22
           cache: "npm"
       - run: npm ci
-      - name: Verify (prettier, lint, tsc)
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y graphviz
+      - name: Verify (prettier, lint, tsc, diagrams)
         run: npm run verify
 
   deploy:

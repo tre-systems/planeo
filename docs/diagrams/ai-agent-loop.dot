@@ -1,0 +1,101 @@
+digraph PlaneoAIAgentLoop {
+  graph [
+    rankdir=TB,
+    bgcolor="#ffffff",
+    pad="0.55",
+    nodesep="0.48",
+    ranksep="0.74",
+    splines=polyline,
+    outputorder=edgesfirst,
+    compound=true,
+    newrank=true,
+    forcelabels=true,
+    fontname="Avenir",
+    label=<
+      <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+        <TR><TD><FONT POINT-SIZE="34"><B>Planeo — AI Agent Decision Loop</B></FONT></TD></TR>
+      </TABLE>
+    >,
+    labelloc=t,
+    labeljust=c
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    margin="0.21,0.13",
+    width=2.85,
+    height=0.70,
+    fixedsize=false,
+    fontname="Avenir",
+    fontsize=18,
+    penwidth=2.4,
+    fontcolor="#14213d",
+    color="#2264c7",
+    fillcolor="#eaf3ff:#ffffff",
+    gradientangle=270
+  ];
+
+  edge [
+    color="#263a59",
+    fontname="Avenir",
+    fontsize=13,
+    fontcolor="#3d4a5c",
+    penwidth=2.2,
+    arrowsize=0.78
+  ];
+
+  subgraph cluster_client {
+    graph [
+      label=<
+        <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#1f5fbf"><B>CLIENT — useAIAgentController (per agent, in the Canvas)</B></FONT></TD></TR>
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#496f9f">Renders each agent's view offscreen and applies the action it gets back.</FONT></TD></TR>
+        </TABLE>
+      >,
+      labelloc=t, labeljust=l,
+      color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=18
+    ];
+    visual [label=<<B>Visual update — every 100 ms</B><BR/><FONT POINT-SIZE="15">offscreen render 320×200</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    hud [label=<<B>aiVisionStore → AIAgentViews HUD</B>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    tick [label=<<B>Decision — every 500 ms</B><BR/><FONT POINT-SIZE="15">guarded by a per-agent in-flight lock</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    decide [label=<<B>requestAiDecision</B><BR/><FONT POINT-SIZE="15">agentId · image · last 10 messages</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    apply [label=<<B>Apply action</B><BR/><FONT POINT-SIZE="15">move = forward × 10 · turn = degrees</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    target [label=<<B>eyesStore.updateAIAgentTarget</B>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    reportback [label=<<B>eyeUpdate → sendBeacon</B><BR/><FONT POINT-SIZE="15">new position to the hub</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    visual -> hud [style=invis];
+    tick -> visual [style=invis];
+  }
+
+  subgraph cluster_server {
+    graph [
+      label=<
+        <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#1e6b43"><B>SERVER ACTION — generateAiActionAndChat</B></FONT></TD></TR>
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#4e7a61">Validated input → Gemini → validated JSON. Fails gracefully to "none".</FONT></TD></TR>
+        </TABLE>
+      >,
+      labelloc=t, labeljust=l,
+      color="#b8e5c8", fillcolor="#f4fbf6", style="rounded,filled", penwidth=1.8, margin=18
+    ];
+    prompt [label=<<B>Build prompt</B><BR/><FONT POINT-SIZE="15">persona + image + chat history</FONT>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
+    valid [label=<<B>Valid JSON?</B><BR/><FONT POINT-SIZE="15">AIResponseSchema</FONT>>, shape=diamond, style=filled, width=3.0, height=1.1, fillcolor="#ffffff", color="#1f2f46"];
+    broadcast [label=<<B>Broadcast chat</B><BR/><FONT POINT-SIZE="15">EVENT_HUB binding</FONT>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
+    pace [label=<<B>Pace</B><BR/><FONT POINT-SIZE="15">await setTimeout(5000)</FONT>>, color="#d39a00", fillcolor="#fff4d1:#fffaf0"];
+    none [label=<<B>action = { none }</B>>, color="#c53030", fillcolor="#fdeaea:#ffffff"];
+    prompt -> valid;
+  }
+
+  gemini [label=<<B>Google Gemini</B><BR/><FONT POINT-SIZE="15">vision · retry/backoff</FONT>>, color="#2264c7", fillcolor="#eaf3ff:#ffffff"];
+
+  tick -> decide;
+  decide -> prompt [label="server action", lhead=cluster_server, ltail=cluster_client];
+  prompt -> gemini [label="generateContent"];
+  gemini -> valid [style=dashed, color="#6b7280", fontcolor="#6b7280"];
+  valid -> broadcast [label="yes — has chatMessage"];
+  valid -> pace [label="yes"];
+  valid -> none [label="no / error", color="#c53030", fontcolor="#c53030"];
+  pace -> apply [label="return action", lhead=cluster_client, ltail=cluster_server];
+  none -> apply [label="return", color="#c53030", fontcolor="#c53030", lhead=cluster_client, ltail=cluster_server];
+  apply -> target -> reportback;
+}

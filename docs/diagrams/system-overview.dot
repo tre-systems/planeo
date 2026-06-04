@@ -1,0 +1,135 @@
+digraph PlaneoSystemOverview {
+  graph [
+    rankdir=TB,
+    bgcolor="#ffffff",
+    pad="0.55",
+    nodesep="0.50",
+    ranksep="0.85",
+    splines=polyline,
+    outputorder=edgesfirst,
+    compound=true,
+    newrank=true,
+    forcelabels=true,
+    fontname="Avenir",
+    label=<
+      <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+        <TR><TD><FONT POINT-SIZE="34"><B>Planeo — System Overview</B></FONT></TD></TR>
+      </TABLE>
+    >,
+    labelloc=t,
+    labeljust=c
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    margin="0.21,0.13",
+    width=2.95,
+    height=0.72,
+    fixedsize=false,
+    fontname="Avenir",
+    fontsize=18,
+    penwidth=2.4,
+    fontcolor="#14213d",
+    color="#2264c7",
+    fillcolor="#eaf3ff:#ffffff",
+    gradientangle=270
+  ];
+
+  edge [
+    color="#263a59",
+    fontname="Avenir",
+    fontsize=13,
+    fontcolor="#3d4a5c",
+    penwidth=2.2,
+    arrowsize=0.78
+  ];
+
+  subgraph cluster_browser {
+    graph [
+      label=<
+        <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#1f5fbf"><B>BROWSER</B></FONT></TD></TR>
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#496f9f">The Next.js client: 3D scene, Zustand state, and the hooks that drive it.</FONT></TD></TR>
+        </TABLE>
+      >,
+      labelloc=t, labeljust=l,
+      color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=20
+    ];
+    scene [label=<<B>React Three Fiber scene</B><BR/><FONT POINT-SIZE="15">Scene · Eyes · Boxes · AIAgentViews HUD</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    hooks [label=<<B>Hooks</B><BR/><FONT POINT-SIZE="15">useEventSource · useEyePositionReporting<BR/>useAIAgentController · useAiChat</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    stores [label=<<B>Zustand stores</B><BR/><FONT POINT-SIZE="15">event · rawEye · eyes · box · chat · aiVision</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    transport [label=<<B>Transport</B><BR/><FONT POINT-SIZE="15">EventSource (SSE in) · sendBeacon / fetch (out)</FONT>>];
+    scene -> hooks [style=invis];
+    hooks -> stores [style=invis];
+    stores -> transport [style=invis];
+  }
+
+  subgraph cluster_worker {
+    graph [
+      label=<
+        <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#334155"><B>CLOUDFLARE WORKER</B></FONT></TD></TR>
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#64748b">One Worker (worker.ts). The custom entry splits real-time traffic from the app.</FONT></TD></TR>
+        </TABLE>
+      >,
+      labelloc=t, labeljust=l,
+      color="#cdd5e0", fillcolor="#f7f9fc", style="rounded,filled", penwidth=1.8, margin=22
+    ];
+
+    entry [label=<<B>worker.ts entry</B><BR/><FONT POINT-SIZE="15">routes /api/events to the DO,<BR/>delegates everything else to Next.js</FONT>>, color="#1f2f46", fillcolor="#eef1f6:#ffffff"];
+
+    subgraph cluster_next {
+      graph [
+        label=<
+          <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+            <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="16" COLOR="#1e6b43"><B>NEXT.JS APP (OpenNext)</B></FONT></TD></TR>
+          </TABLE>
+        >,
+        labelloc=t, labeljust=l,
+        color="#b8e5c8", fillcolor="#f4fbf6", style="rounded,filled", penwidth=1.8, margin=18
+      ];
+      pages [label=<<B>Pages / RSC + assets</B>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
+      actions [label=<<B>Server actions</B><BR/><FONT POINT-SIZE="15">generateMessage · aiControllerActions · tts</FONT>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
+    }
+
+    subgraph cluster_do {
+      graph [
+        label=<
+          <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+            <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="16" COLOR="#0f766e"><B>EVENTHUB DURABLE OBJECT</B></FONT></TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#357a74">A single idFromName("global") instance — the shared-world authority.</FONT></TD></TR>
+          </TABLE>
+        >,
+        labelloc=t, labeljust=l,
+        color="#99d5cf", fillcolor="#f0fdfa", style="rounded,filled", penwidth=1.8, margin=18
+      ];
+      do_state [label=<<B>In-memory state</B><BR/><FONT POINT-SIZE="15">eyes · boxes · subscribers</FONT>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
+      do_sse [label=<<B>SSE broadcast + replay</B><BR/><FONT POINT-SIZE="15">text/event-stream · alarm purges stale eyes</FONT>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
+      do_state -> do_sse [style=invis];
+    }
+  }
+
+  subgraph cluster_external {
+    graph [
+      label=<
+        <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#1f5fbf"><B>EXTERNAL APIS</B></FONT></TD></TR>
+        </TABLE>
+      >,
+      labelloc=t, labeljust=l,
+      color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=18
+    ];
+    gemini [label=<<B>Google Gemini</B><BR/><FONT POINT-SIZE="15">vision (1.5-flash) · text (2.0-flash-lite)</FONT>>];
+    gtts [label=<<B>Google Cloud TTS</B><BR/><FONT POINT-SIZE="15">REST · Chirp3-HD voices</FONT>>];
+  }
+
+  transport -> entry [label="GET /api/events  (SSE)", lhead=cluster_worker];
+  transport -> entry [label="POST eyeUpdate / boxUpdate / chat", style=dashed, color="#6b7280", fontcolor="#6b7280"];
+  entry -> do_state [label="/api/events → stub", lhead=cluster_do];
+  entry -> pages [label="all other requests", lhead=cluster_next];
+  scene -> actions [label="server action (vision/chat)", ltail=cluster_browser, lhead=cluster_next, style=dashed, color="#6b7280", fontcolor="#6b7280"];
+  actions -> gemini [label="generate", ltail=cluster_next, lhead=cluster_external];
+  actions -> do_state [label="broadcast chat (EVENT_HUB binding)", ltail=cluster_next, lhead=cluster_do];
+  actions -> gtts [label="synthesize speech", ltail=cluster_next];
+}

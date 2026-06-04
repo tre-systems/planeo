@@ -50,6 +50,10 @@ Read before substantial work:
   which `npm run dev` does not exercise.
 - Run `npm run cf-typegen` (`wrangler types`) after editing `wrangler.jsonc` to
   regenerate the binding/env types.
+- Diagrams: edit the `.dot` sources in [`docs/diagrams/`](docs/diagrams/), then
+  `npm run diagrams` to re-render the PNGs (needs Graphviz — `brew install graphviz`);
+  `check:diagrams` (part of `verify`) confirms they render. Use Graphviz for
+  complex diagrams, inline Mermaid for small ones.
 - There is no pre-commit hook in this repo, so run the gate yourself before
   pushing — a red `check` job blocks the deploy.
 

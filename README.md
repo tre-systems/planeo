@@ -35,6 +35,7 @@ Follow these instructions to set up and run Planeo on your local machine.
 
 - Node.js (v22 or higher recommended)
 - npm (comes with Node.js) or yarn
+- Graphviz (optional, only for re-rendering the architecture diagrams: `brew install graphviz`)
 
 ### Setup Instructions
 

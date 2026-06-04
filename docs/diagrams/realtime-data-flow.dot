@@ -1,0 +1,117 @@
+digraph PlaneoRealtimeDataFlow {
+  graph [
+    rankdir=TB,
+    bgcolor="#ffffff",
+    pad="0.55",
+    nodesep="0.46",
+    ranksep="0.78",
+    splines=polyline,
+    outputorder=edgesfirst,
+    compound=true,
+    newrank=true,
+    forcelabels=true,
+    fontname="Avenir",
+    label=<
+      <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+        <TR><TD><FONT POINT-SIZE="34"><B>Planeo — Real-time Data Flow</B></FONT></TD></TR>
+      </TABLE>
+    >,
+    labelloc=t,
+    labeljust=c
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    margin="0.21,0.13",
+    width=2.85,
+    height=0.70,
+    fixedsize=false,
+    fontname="Avenir",
+    fontsize=18,
+    penwidth=2.4,
+    fontcolor="#14213d",
+    color="#2264c7",
+    fillcolor="#eaf3ff:#ffffff",
+    gradientangle=270
+  ];
+
+  edge [
+    color="#263a59",
+    fontname="Avenir",
+    fontsize=13,
+    fontcolor="#3d4a5c",
+    penwidth=2.2,
+    arrowsize=0.78
+  ];
+
+  subgraph cluster_out {
+    graph [
+      label=<
+        <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#1f5fbf"><B>OUTBOUND (this client)</B></FONT></TD></TR>
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#496f9f">Local movement is rate-limited and pushed to the hub.</FONT></TD></TR>
+        </TABLE>
+      >,
+      labelloc=t, labeljust=l,
+      color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=18
+    ];
+    cam [label=<<B>Camera move / box drag</B>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    report [label=<<B>useEyePositionReporting</B><BR/><FONT POINT-SIZE="15">poll 100 ms · change-detect</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    beacon [label=<<B>sendBeacon / fetch</B><BR/><FONT POINT-SIZE="15">POST /api/events</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    cam -> report -> beacon;
+  }
+
+  subgraph cluster_hub {
+    graph [
+      label=<
+        <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#0f766e"><B>EVENTHUB DURABLE OBJECT</B></FONT></TD></TR>
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#357a74">Validates, merges (last-write-wins), and fans out to every subscriber.</FONT></TD></TR>
+        </TABLE>
+      >,
+      labelloc=t, labeljust=l,
+      color="#99d5cf", fillcolor="#f0fdfa", style="rounded,filled", penwidth=1.8, margin=18
+    ];
+    setstate [label=<<B>setEye / setBox</B><BR/><FONT POINT-SIZE="15">EventSchema validate · merge</FONT>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
+    bcast [label=<<B>broadcast</B><BR/><FONT POINT-SIZE="15">data: &lt;json&gt; to all subscribers + replay on connect</FONT>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
+    setstate -> bcast;
+  }
+
+  subgraph cluster_in {
+    graph [
+      label=<
+        <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#1f5fbf"><B>INBOUND (every client)</B></FONT></TD></TR>
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#496f9f">One SSE stream, parsed once, fanned out by event type. Eyes flow through three layers: raw → synchronizer → animated.</FONT></TD></TR>
+        </TABLE>
+      >,
+      labelloc=t, labeljust=l,
+      color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=18
+    ];
+    es [label=<<B>EventSource</B><BR/><FONT POINT-SIZE="15">GET /api/events</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    handle [label=<<B>eventStore._handleMessage</B><BR/><FONT POINT-SIZE="15">safeParse · fan out by type</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+
+    raw [label=<<B>rawEyeEventStore</B><BR/><FONT POINT-SIZE="15">raw { p, l, t } off the wire</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    sync [label=<<B>useEyesDataSynchronizer</B><BR/><FONT POINT-SIZE="15">raw record → animated targets</FONT>>, color="#7c3aed", fillcolor="#f5f3ff:#ffffff"];
+    eyesAnim [label=<<B>eyesStore</B><BR/><FONT POINT-SIZE="15">Vector3 lerp · opacity fade</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    eyesRender [label=<<B>Eyes (R3F render)</B>>, color="#15803d", fillcolor="#d8f5de:#effcf2", penwidth=3.0];
+
+    chat [label=<<B>communicationStore</B>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    chatUI [label=<<B>ChatWindow (render)</B>>, color="#15803d", fillcolor="#d8f5de:#effcf2", penwidth=3.0];
+
+    boxAnim [label=<<B>boxStore</B><BR/><FONT POINT-SIZE="15">current → target lerp</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    boxRender [label=<<B>ServerDrivenBoxes (render)</B>>, color="#15803d", fillcolor="#d8f5de:#effcf2", penwidth=3.0];
+
+    es -> handle;
+    handle -> raw [label="eyeUpdate"];
+    handle -> chat [label="chatMessage"];
+    handle -> boxAnim [label="box"];
+    raw -> sync -> eyesAnim -> eyesRender;
+    chat -> chatUI;
+    boxAnim -> boxRender;
+  }
+
+  beacon -> setstate [label="POST event", lhead=cluster_hub, ltail=cluster_out];
+  bcast -> es [label="SSE (text/event-stream)", lhead=cluster_in, ltail=cluster_hub];
+}

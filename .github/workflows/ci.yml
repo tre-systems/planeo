@@ -29,7 +29,11 @@ jobs:
   deploy:
     name: Deploy to Cloudflare
     needs: check
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Deploys are PAUSED — planeo is intentionally offline while in development.
+    # Re-enable by setting the repo variable DEPLOY_ENABLED to "true"
+    # (`gh variable set DEPLOY_ENABLED --body true`), or by removing the
+    # `vars.DEPLOY_ENABLED == 'true' &&` guard below.
+    if: vars.DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

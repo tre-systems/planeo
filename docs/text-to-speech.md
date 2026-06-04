@@ -8,7 +8,7 @@ See [ARCHITECTURE.md](../ARCHITECTURE.md) for the system overview.
 
 The TTS system uses Google Cloud Text-to-Speech to give each user in the chat a distinct and consistent Chirp3-HD voice. When a new chat message is rendered, if it's not from the current user and not a command message (starting with `/`), the system synthesizes the message text into speech and plays it.
 
-A separate `generateAudio` stub in `src/lib/audioService.ts` returns a static test clip and is unused/vestigial (see [BACKLOG.md](./BACKLOG.md)); it is not part of this path.
+Auth runs over the **REST API** (`texttospeech.googleapis.com`): an OAuth access token is minted from the service-account key with the Web Crypto API (RS256) in `src/lib/googleAuth.ts`, since the gRPC `@google-cloud/*` client cannot run on the Cloudflare Workers runtime.
 
 ## Technical Implementation
 
@@ -23,7 +23,7 @@ A separate `generateAudio` stub in `src/lib/audioService.ts` returns a static te
   - A predefined list of Google Cloud Chirp3-HD voices is used (see `chirp3Voices` in `tts.ts`).
   - If `voiceName` is not provided in the parameters, a voice is deterministically assigned to a `userId` by hashing the `userId`. This ensures that each user consistently has the same voice.
   - The language code is derived from the selected voice name (e.g., `en-US`, `en-GB`).
-- **Authentication**: The Google Cloud Text-to-Speech client is initialized in `tts.ts` (`initializeTTSClientInternal`), which validates and parses the service-account JSON from the `GOOGLE_APP_CREDS_JSON` environment variable. The client is created once and cached for reuse.
+- **Authentication**: Each request `POST`s to the REST endpoint with a `Bearer` token from `getGoogleAccessToken` (`src/lib/googleAuth.ts`), which validates and parses the service-account JSON from the `GOOGLE_APP_CREDS_JSON` environment variable, signs an RS256 JWT with the Web Crypto API, and exchanges it for an OAuth access token. The token is cached until shortly before it expires.
 
 ### Client-Side (React Components)
 
@@ -38,8 +38,8 @@ A separate `generateAudio` stub in `src/lib/audioService.ts` returns a static te
 
 ### Environment Variables
 
-- `GOOGLE_APP_CREDS_JSON`: **Required**. A JSON string containing the Google Cloud service account credentials necessary for the Text-to-Speech API. This should be set in your `.env.local` or server environment.
-- `NEXT_PUBLIC_TTS_ENABLED`: **Optional**. Set to `"false"` to disable Text-to-Speech functionality across the application. If not set, or set to any other value (e.g., `"true"`), TTS will be enabled by default. This is useful for disabling TTS during development, testing (e.g., end-to-end tests), or if a user wishes to globally turn off the feature via environment configuration.
+- `GOOGLE_APP_CREDS_JSON`: **Required for TTS**. A single-line JSON string with the Google Cloud service-account credentials for the Text-to-Speech API. Set it in `.dev.vars` locally (copied from `.dev.vars.example`) or with `wrangler secret put GOOGLE_APP_CREDS_JSON` in production.
+- `NEXT_PUBLIC_TTS_ENABLED`: **Optional, build-time**. Set to `"false"` to disable Text-to-Speech across the application; any other value (or unset) leaves it enabled. Useful for disabling TTS during development or end-to-end tests. It is inlined by Next at build time.
 
 ## Error Handling
 

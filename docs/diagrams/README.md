@@ -19,9 +19,6 @@ Color coding by domain:
 - **Blue** — the browser client (3D scene, stores, hooks) and external APIs.
 - **Green** — server-side code (the Next.js app / server actions).
 - **Teal** — the EventHub Durable Object (the shared-world authority).
-- **Orange** — time-driven pacing (the server-side `setTimeout`).
-- **Purple** — pure transforms (e.g. the eyes synchronizer).
-- **Red** — error / fallback outcomes.
 - **Diamonds** — decisions. **Bold green outline** — a terminal render/output.
 
 Fonts: Avenir. Rendered at 220 DPI.

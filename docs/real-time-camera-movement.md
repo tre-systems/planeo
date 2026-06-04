@@ -47,12 +47,11 @@ This document outlines the real-time camera movement and orientation driven by k
 
 ### 4. Server-Side Event Handling
 
-- **API Route:** `src/app/api/events/route.ts`
-- The `POST` handler receives the `eyeUpdate` event.
-- It validates the payload against `ValidatedEyeUpdatePayloadSchema`.
-- If valid, the `setEye` function in `src/app/api/events/sseStore.ts` is called.
-- `setEye` updates the server's in-memory record of the user's eye position and then calls `broadcast`.
-- `broadcast` sends the `eyeUpdate` event data to all subscribed clients via Server-Sent Events (SSE).
+- **Handler:** The `EventHub` Durable Object (`src/server/eventHub.ts`), reached via `/api/events` (routed there by `worker.ts`).
+- The DO's `POST` handler validates the body against `EventSchema` and, for the `eyeUpdate` variant, against `ValidatedEyeUpdatePayloadSchema`.
+- If valid, the `setEye` function is called.
+- `setEye` merges the incoming fields over the DO's in-memory record of the user's eye, then calls `broadcast`.
+- `broadcast` writes the complete `eyeUpdate` message to every subscribed client over Server-Sent Events (SSE).
 
 ### 5. Client-Side Event Reception and Rendering
 
@@ -74,8 +73,8 @@ This document outlines the real-time camera movement and orientation driven by k
 - `src/app/components/Scene.tsx`: Handles keyboard input and camera updates.
 - `src/hooks/useEyePositionReporting.ts`: Sends local camera changes to the server.
 - `src/domain/event.ts`: Defines the Zod schema for the `eyeUpdate` event.
-- `src/app/api/events/route.ts`: API endpoint for receiving events.
-- `src/app/api/events/sseStore.ts`: Manages SSE connections and broadcasts events.
+- `src/server/eventHub.ts`: The `EventHub` Durable Object — receives events, holds the eye/box state, and broadcasts over SSE.
+- `worker.ts`: Routes `/api/events` to the Durable Object.
 - `src/stores/eventStore.ts`: Client-side SSE handling and event dispatching.
 - `src/hooks/useEventSource.ts`: Opens the SSE connection and registers listeners.
 - `src/hooks/useEyesDataSynchronizer.ts`: Maps raw eye records into the rendered eyes store.

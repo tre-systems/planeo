@@ -11,7 +11,7 @@ The shared environment contains a fixed set of physics cubes, rendered by `Serve
 - Are a fixed size (`15 × 15 × 15`).
 - Spawn at deterministic initial positions laid out along the X axis (`[i * 15 - (N - 1) * 7.5, 5, -20]`), where the count comes from `NUMBER_OF_BOXES`.
 - Each take a color cycled from a fixed 12-entry palette.
-- Are dynamic `RigidBody` instances with `cuboid` colliders, so they fall under gravity and interact with each other, the ground, and the eyes.
+- Are simulated on the elected **host** client only: there each box is a `dynamic` `RigidBody` with a `cuboid` collider, so it falls under gravity and interacts with the other cubes, the ground, and the eyes. On every other client the same box is a `kinematicPosition` body that follows the `box` events the host broadcasts. The `RigidBody` is keyed on the host/viewer role so it cleanly remounts (`dynamic` ↔ `kinematicPosition`) when the host changes.
 
 ## Eyes
 
@@ -24,7 +24,7 @@ User and AI-agent representations (eyeballs) are also part of the physics simula
 
 - **Physics Engine:** The simulation is powered by `react-three-rapier`, a wrapper around the Rapier physics engine for React Three Fiber.
 - **Components:**
-  - `Box.tsx`: Exports `ServerDrivenBoxes`, which reads cube state from the `boxStore` and renders one `SyncedRigidBox` per cube. Each `SyncedRigidBox` is a dynamic `RigidBody` with a `cuboid` collider.
+  - `Box.tsx`: Exports `ServerDrivenBoxes`, which reads cube state from the `boxStore` and renders one `SyncedRigidBox` per cube. Each `SyncedRigidBox` is a `RigidBody` with a `cuboid` collider — `dynamic` on the host, `kinematicPosition` on viewers.
   - `Eye.tsx` and `Eyes.tsx`: These components manage the creation and behavior of the eye representations. Each eye is a `kinematicPosition` `RigidBody` with a `BallCollider`. Their positions and rotations are updated kinematically in the `useFrame` loop within `Eyes.tsx` (via `setNextKinematicTranslation` / `setNextKinematicRotation`).
   - `Scene.tsx`: The main scene wraps `CanvasContent`, `Eyes`, and `ServerDrivenBoxes` in a `<Physics>` component from `react-three-rapier`, establishing the physics world.
 - **Ground Plane:** A static (`type="fixed"`) `RigidBody` with a `CuboidCollider` acts as the ground, preventing the cubes from falling indefinitely.

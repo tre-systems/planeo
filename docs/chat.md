@@ -10,7 +10,7 @@ The chat feature displays text messages from the human user and AI agents in rea
 
 ## Components
 
-- **`Message` (Domain Model):** Defined in `src/domain/message.ts` using a Zod schema (`MessageSchema`). It includes `id` (uuid), `userId`, optional `name`, `text` (minimum length 1), `timestamp`, and optional `audioSrc` fields.
+- **`Message` (Domain Model):** Defined in `src/domain/message.ts` using a Zod schema (`MessageSchema`). It includes `id` (uuid), `userId`, optional `name`, `text` (minimum length 1), and `timestamp` fields.
 - **`useCommunicationStore` (Zustand Store):** Located in `src/stores/communicationStore.ts`. It manages:
   - An array of `Message` objects (chat messages) and an `addMessage` action to append new messages.
   - The visibility state of the chat window (`isChatVisible`) and a `toggleChatVisibility` action.

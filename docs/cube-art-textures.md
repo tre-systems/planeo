@@ -9,7 +9,7 @@ Each interactive cube in the 3D environment displays a piece of art on one rando
 - **Textures:** Each cube has an artwork textured onto one of its six faces; the remaining five faces keep their solid color.
 - **Art Source:** The artworks come from The Metropolitan Museum of Art's Open Access collection. The images are served locally from the `/public/art/` directory to ensure reliability and avoid CORS issues.
 - **Implementation:**
-  - The `SyncedRigidBox` component in `src/app/components/Box.tsx` takes a `box` prop and selects its art internally — on mount it picks a stable random URL from `artImageUrls` (the list defined in `Box.tsx`).
+  - The `SyncedRigidBox` component in `src/app/components/Box.tsx` takes a `box` prop and selects its art internally — on mount it picks a random URL from `artImageUrls` (the list defined in `Box.tsx`) and holds it in `useState` so it stays fixed for the component's lifetime. The choice is per-client (it is not synced across clients the way the box color is).
   - It uses the `useTexture` hook from `@react-three/drei` to asynchronously load the chosen image from its local URL (e.g., `/art/image_1.jpg`).
   - The loaded texture is applied as a `meshStandardMaterial` to one face of the `Box` geometry. The other faces use the box's color.
 - **Current Artworks:** The images served from `/public/art/` are:
@@ -20,7 +20,7 @@ Each interactive cube in the 3D environment displays a piece of art on one rando
 
 ## Technical Details
 
-Each `SyncedRigidBox` chooses a random face to carry the art by picking a random material slot (`material-${randomIndex}` for a random index `0–5`) when it mounts. The `Box` component from `@react-three/drei` allows specifying a different material per face: the art texture is applied to the chosen slot, and the box's color is applied to the other five.
+Each `SyncedRigidBox` chooses a random face to carry the art by picking a random material slot (`material-${randomIndex}` for a random index `0–5`) when it mounts, also held in `useState`. The `Box` component from `@react-three/drei` allows specifying a different material per face: the art texture is applied to the chosen slot, and the box's color is applied to the other five.
 
 ## Future Enhancements
 

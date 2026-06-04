@@ -42,7 +42,7 @@ Follow these instructions to set up and run Planeo on your local machine.
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/rgilks/planeo.git
+    git clone https://github.com/tre-systems/planeo.git
     cd planeo
     ```
 
@@ -163,10 +163,9 @@ More detailed per-feature documentation can be found in the `docs/` folder:
 
 ## Planned Features
 
-The following are areas for future development:
+The following are areas for future development (see [`docs/BACKLOG.md`](docs/BACKLOG.md) for the full list):
 
-- **Full Text-to-Speech Integration:** Completing the switch from test audio to dynamic Google Cloud TTS.
-- **Enhanced AI Capabilities:** More complex AI behaviors, memory, and interaction models.
+- **Enhanced AI Capabilities:** More complex AI behaviors, memory across decisions, and agent-to-agent dialogue.
 - **User-to-User Chat:** Allowing human users to chat directly with each other.
 - **Expanded World Interactions:** More ways for users and AI to interact with the 3D environment and its objects.
 - **Persistent User Accounts/Profiles.**

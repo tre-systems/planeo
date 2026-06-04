@@ -44,6 +44,91 @@ one instance. To run multiple independent worlds you would shard by DO name
 | `wrangler.jsonc`               | Worker config: `main = worker.ts`, the `EVENT_HUB` Durable Object binding + migration, non-secret `vars`.                                                                      |
 | `open-next.config.ts`          | `@opennextjs/cloudflare` adapter config (default in-memory cache).                                                                                                             |
 
+## Patterns
+
+Planeo is built from a small set of recurring patterns; naming them is the
+fastest way to understand the code and the standard to hold new code to. Where
+the code does not yet follow a pattern consistently, and patterns worth adopting,
+are tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md#pattern-consistency--gaps).
+
+### Data & contracts
+
+- **Schema is the source of truth.** Every domain type is `z.infer<typeof Schema>` —
+  no hand-written parallel types. [`src/domain/`](src/domain/).
+- **Tagged unions for variants.** Wire events and AI actions are discriminated
+  unions keyed on `type`, giving exhaustive narrowing on both ends (`EventSchema`
+  in `event.ts`, `AIActionSchema` in `aiAction.ts`).
+- **Parse at the boundary.** Untrusted input is `safeParse`d where it enters the
+  system and rejected on failure: the DO `POST`, the SSE message on the client,
+  the LLM's JSON output, parsed secrets and config.
+- **The LLM's output is a schema.** The model must return JSON matching
+  `AIResponseSchema`; the raw text is fence-stripped, parsed, validated, and
+  dropped if invalid (`generateMessage.ts`).
+- **Refinements for cross-field rules.** Invariants like "at least one of `p`/`l`"
+  live in a `.refine()`d schema, not handler code (`ValidatedEyeUpdatePayloadSchema`,
+  `ValidatedBoxUpdatePayloadSchema`).
+- **Compose + share.** Event schemas `.extend()` a base entity; shared magic
+  numbers live in one `sceneConstants` module imported by both client and DO.
+
+### Real-time & server
+
+- **One Durable Object is the authority.** A single `idFromName("global")`
+  instance owns all shared state; clients never hold authority.
+- **Custom Worker entry: route-one, delegate-rest.** `worker.ts` forwards
+  `/api/events` to the DO and hands everything else to the Next.js app.
+- **Broadcast / subscribe with state replay.** A new SSE subscriber is registered,
+  replayed the full current world, then fed live deltas; cleanup is driven by the
+  request abort signal.
+- **Last-write-wins partial merge.** `setEye`/`setBox` merge incoming fields over
+  existing state (`p ?? existing?.p`), then store and broadcast a complete message.
+- **Self-rescheduling alarm.** The DO's `alarm()` does periodic housekeeping
+  (purge stale eyes) and only re-arms while there is something to maintain.
+- **`"use server"` actions are the only server entry points** besides the DO's
+  `/api/events`; clients call them directly.
+- **Bindings via `getCloudflareContext().env`.** Server actions reach the DO
+  through the binding; the DO reads config from its injected `env` param.
+- **Lazy singleton clients.** External clients/credentials are created once and
+  cached (the Gemini client; the OAuth token, cached with an expiry).
+- **Workers-native crypto.** Google auth is REST + Web Crypto (RS256), never the
+  gRPC `@google-cloud/*` SDKs (which don't run on Workers).
+- **Best-effort broadcast.** Broadcast and stream-write failures are caught and
+  dropped, never thrown, so one dead client can't break the loop.
+- **Deliberate server-side pacing.** A fixed `setTimeout(5000)` in the vision
+  action is the agent-loop rate limiter.
+- **Wrangler-bundled code imports relatively.** The DO is bundled by Wrangler, not
+  Next, so it imports domain schemas from specific files via relative paths —
+  never `@/…` or any module that reads `process.env` at load.
+
+### Client state & rendering
+
+- **Zustand + immer stores**, one per concern ([`src/stores/`](src/stores/)).
+- **Three-layer eye pipeline.** Network truth (`rawEyeEventStore`) → a synchronizer
+  hook (`useEyesDataSynchronizer`) → animated render state (`eyesStore`); raw data
+  and render/animation state never mix.
+- **Store-as-animation-engine.** Stores expose `update*Animations(delta)` that lerp
+  current→target; a component `useFrame` just calls it (`boxStore`, `eyesStore`).
+- **Optimistic local update + server reconcile.** Local actions mutate immediately;
+  the authoritative SSE echo overwrites later (and your own echo is dropped).
+- **Rate-limited egress.** Outbound updates are throttled / change-detected /
+  interval-batched and sent via `navigator.sendBeacon` (`useEyePositionReporting`,
+  `eventStore.sendBoxUpdate`, `Box.tsx` thresholds).
+- **Listener registry.** `eventStore` exposes `subscribe*` returning an unsubscribe
+  closure; new subscribers get a state replay.
+- **Hooks are side-effect controllers.** `use*` hooks render nothing; they own the
+  subscriptions, intervals, and frame loops, wired at the top of `page.tsx`/`Scene.tsx`.
+- **Refs mirror the store** for per-frame, non-reactive objects (rigid bodies,
+  render targets) so frame code never triggers re-renders.
+
+### Cross-cutting
+
+- **Determinism over stored state.** Stable mappings come from hashing inputs, not
+  stored assignments (per-user TTS voice, per-box color).
+- **Env-gated debug handles.** Stores attach to `window.__store` only outside
+  production (or under `NEXT_PUBLIC_E2E`).
+- **Docs layering.** This `ARCHITECTURE.md` (the overview) + focused `docs/*` per
+  feature + `docs/BACKLOG.md` for gaps and forward work; `AGENTS.md`/`CLAUDE.md`
+  for workflow.
+
 ## Render & input
 
 [`Scene.tsx`](src/app/components/Scene.tsx) opens the SSE connection via

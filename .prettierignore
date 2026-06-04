@@ -1,0 +1,10 @@
+# Generated / build output — not ours to format.
+worker-configuration.d.ts
+.open-next/
+.wrangler/
+.next/
+out/
+package-lock.json
+playwright-report/
+test-results/
+debug_images/

@@ -1,6 +1,6 @@
 # Planeo
 
-[![CI/CD](https://github.com/tre-systems/planeo/actions/workflows/fly.yml/badge.svg)](https://github.com/tre-systems/planeo/actions/workflows/fly.yml)
+[![CI/CD](https://github.com/tre-systems/planeo/actions/workflows/ci.yml/badge.svg)](https://github.com/tre-systems/planeo/actions/workflows/ci.yml)
 
 ![planeo Screenshot](/screenshots/loaded.png)
 
@@ -52,54 +52,86 @@ Follow these instructions to set up and run Planeo on your local machine.
     ```
 
 3.  **Set up environment variables:**
-    Copy the example environment file to create your local configuration:
+
+    Secrets are read from a local `.dev.vars` file. Copy the example and fill it
+    in:
 
     ```bash
-    cp .env.example .env.local
+    cp .dev.vars.example .dev.vars
     ```
 
-    Now, edit `.env.local` and provide the necessary values:
-
-    - `NEXT_PUBLIC_APP_URL`: The public URL of your application (e.g., `http://localhost:3000` for local development).
-      - _Used by: `src/app/actions/generateMessage.ts` for SSE event posting._
-    - `GOOGLE_AI_API_KEY`: Your API key for Google Generative AI (e.g., Gemini).
+    - `GOOGLE_AI_API_KEY`: Your API key for Google Generative AI (Gemini).
+      Required for AI agents to think and chat.
       - _Used by: `src/lib/googleAI.ts` for AI text and vision model interactions._
-    - `AI_AGENTS_CONFIG` (Optional): JSON string to define custom AI agents. If not set, defaults to two agents (Orion and Nova).
-      - _Example: `AI_AGENTS_CONFIG='[{"id":"custom-ai-1","displayName":"Custom AI Alpha"},{"id":"custom-ai-2","displayName":"Custom AI Beta"}]'`_
-      - _Used by: `src/domain/aiAgent.ts`, `src/app/api/events/route.ts`._
-      - See `docs/ai-agents.md` for more details.
-    - `TOTAL_AGENTS` (Optional): The maximum number of AI agents allowed in the environment. Defaults to 0 if not set on the server-side, influencing AI agent initialization.
-      - _Used by: `src/lib/env.ts`, potentially affecting `src/app/api/events/sseStore.ts`._
-    - `NUMBER_OF_BOXES` (Optional): The number of interactive cubes to spawn in the environment. Defaults to 5 if not set.
-      - _Used by: `src/lib/env.ts`, `src/app/api/events/sseStore.ts`._
-    - `NEXT_PUBLIC_TTS_ENABLED` (Optional): Set to `"false"` to disable Text-to-Speech functionality. Defaults to `true` (enabled).
-      - _Used by: `src/components/ChatMessage.tsx`, `src/app/actions/tts.ts`._
-    - `GOOGLE_APP_CREDS_JSON` (Optional, for full TTS): JSON string containing Google Cloud service account credentials for Text-to-Speech API. Required if you intend to use the full Google Cloud TTS feature (currently prototyped).
-      - _Used by: `src/app/actions/tts.ts`._
+    - `GOOGLE_APP_CREDS_JSON` (Optional, for TTS): Google Cloud service-account
+      JSON (single line) for the Text-to-Speech REST API.
+      - _Used by: `src/app/actions/tts.ts` via `src/lib/googleAuth.ts`._
       - See `docs/text-to-speech.md` for setup.
 
-4.  **Run the development server:**
+    Non-secret world configuration lives in [`wrangler.jsonc`](wrangler.jsonc)
+    under `vars`:
+
+    - `AI_AGENTS_CONFIG` (Optional): JSON string to define custom AI agents. If
+      not set, defaults to two agents (Orion and Nova).
+      - _Example: `[{"id":"custom-ai-1","displayName":"Custom AI Alpha"},{"id":"custom-ai-2","displayName":"Custom AI Beta"}]`_
+      - _Used by: `src/domain/aiAgent.ts`, `src/server/eventHub.ts`._
+      - See `docs/ai-agents.md` for more details.
+    - `TOTAL_AGENTS` (Optional): The maximum number of AI agents given starting
+      positions. Defaults to 0.
+      - _Used by: `src/server/eventHub.ts`._
+    - `NUMBER_OF_BOXES` (Optional): The number of interactive cubes to spawn.
+      Defaults to 5.
+      - _Used by: `src/server/eventHub.ts`._
+    - `NEXT_PUBLIC_TTS_ENABLED` (Optional, build-time): Set to `"false"` to
+      disable Text-to-Speech. Defaults to enabled.
+      - _Used by: `src/components/ChatMessage.tsx`, `src/app/actions/tts.ts`._
+
+    In production, secrets are set with `wrangler secret put <NAME>`.
+
+4.  **Run the development server (UI only):**
 
     ```bash
     npm run dev
-    # or
-    # yarn dev
     ```
 
-    Open [http://localhost:3000](http://localhost:3000) in your browser.
+    Open [http://localhost:3000](http://localhost:3000) in your browser. The
+    real-time hub (the `EventHub` Durable Object behind `/api/events`) is not
+    served by `next dev`.
 
-5.  **Build for production:**
+5.  **Run the full Workers runtime locally:**
+
+    To exercise everything — including real-time multi-user sync and the AI
+    loop — build and preview under the Cloudflare Workers runtime:
+
     ```bash
-    npm run build
-    npm run start
-    # or
-    # yarn build
-    # yarn start
+    npm run preview
     ```
+
+## Deployment
+
+Planeo runs on **Cloudflare Workers** via the `@opennextjs/cloudflare` adapter,
+with the `EventHub` Durable Object as the real-time backend. Worker config is in
+[`wrangler.jsonc`](wrangler.jsonc).
+
+Deploy from your machine with:
+
+```bash
+npm run deploy
+```
+
+Pushing to `main` also deploys automatically via GitHub Actions
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) once the
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets are set.
+The app deploys to a `*.workers.dev` URL; a `planeo.tre.systems` custom domain is
+an optional one-line addition to `wrangler.jsonc` and is not yet configured.
+
+Production secrets (`GOOGLE_AI_API_KEY`, `GOOGLE_APP_CREDS_JSON`) are set with
+`wrangler secret put <NAME>`.
 
 ## Key Technologies Used
 
-- Next.js (React Framework)
+- Next.js (React Framework), running on Cloudflare Workers via `@opennextjs/cloudflare`
+- Cloudflare Durable Objects (single `EventHub` instance for real-time state)
 - React Three Fiber (for 3D graphics)
 - Drei (helpers for React Three Fiber)
 - Rapier (physics engine via `react-three-rapier`)
@@ -122,7 +154,7 @@ More detailed per-feature documentation can be found in the `docs/` folder:
 - `docs/physics.md`: Explanation of the physics simulation for objects in the 3D scene.
 - `docs/real-time-camera-movement.md`: Covers how camera/user movements are handled and synchronized.
 - `docs/sse-event-handling.md`: Describes the Server-Sent Events (SSE) mechanism for real-time updates.
-- `docs/text-to-speech.md`: Information on the text-to-speech functionality (currently using test audio, with details on the planned full integration).
+- `docs/text-to-speech.md`: Information on the text-to-speech functionality (Google Cloud TTS via the REST API).
 - `docs/ai-interaction-flow.md`: Details the synchronized flow of AI actions, chat, and audio playback.
 - `docs/cube-art-textures.md`: Details on how artwork is displayed on interactive cubes.
 

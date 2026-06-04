@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "planeo",
+  "main": "worker.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+  },
+  "workers_dev": true,
+  // Preview URLs are unsupported for Workers that define a Durable Object.
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+  },
+  // Non-secret world config. Secrets (GOOGLE_AI_API_KEY, GOOGLE_APP_CREDS_JSON)
+  // are set with `wrangler secret put` (or .dev.vars locally).
+  "vars": {
+    "NUMBER_OF_BOXES": "5",
+    "TOTAL_AGENTS": "2",
+    "AI_AGENTS_CONFIG": "",
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "EVENT_HUB", "class_name": "EventHub" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["EventHub"] }],
+}

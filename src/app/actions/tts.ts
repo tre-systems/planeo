@@ -1,81 +1,14 @@
 "use server";
 
-import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 import { z } from "zod";
 
-// Removed: import { initializeTTSClient } from "./ttsClient";
+import { getGoogleAccessToken } from "@/lib/googleAuth";
 
-// Content from ttsClient.ts starts here
-const ServiceAccountCredentialsSchema = z.object({
-  type: z.string(),
-  project_id: z.string(),
-  private_key_id: z.string(),
-  private_key: z.string(),
-  client_email: z.string().email(),
-  client_id: z.string(),
-  auth_uri: z.string().url(),
-  token_uri: z.string().url(),
-  auth_provider_x509_cert_url: z.string().url(),
-  client_x509_cert_url: z.string().url(),
-  universe_domain: z.string(),
-});
+// Google Cloud Text-to-Speech via the REST API (the gRPC @google-cloud/* client
+// does not run on the Cloudflare Workers runtime). Auth is a service-account
+// OAuth token minted in googleAuth.ts.
 
-let ttsGlobalClient: TextToSpeechClient | null = null; // Renamed from 'client' to avoid conflict
-
-const initializeTTSClientInternal = (): TextToSpeechClient => {
-  // Renamed from initializeTTSClient and made internal
-  if (ttsGlobalClient) return ttsGlobalClient;
-
-  try {
-    const credsJson = process.env["GOOGLE_APP_CREDS_JSON"];
-    if (!credsJson) {
-      throw new Error(
-        "[TTS Client] GOOGLE_APP_CREDS_JSON environment variable not set.",
-      );
-    }
-
-    let parsedJson: unknown;
-    try {
-      parsedJson = JSON.parse(credsJson);
-    } catch (parseError) {
-      console.error(
-        "[TTS Client] Failed to parse GOOGLE_APP_CREDS_JSON:",
-        parseError,
-      );
-      throw new Error(
-        "[TTS Client] Failed to parse service account credentials. Ensure it is valid JSON.",
-      );
-    }
-
-    const validationResult =
-      ServiceAccountCredentialsSchema.safeParse(parsedJson);
-
-    if (!validationResult.success) {
-      console.error(
-        "[TTS Client] Invalid GOOGLE_APP_CREDS_JSON structure or types:",
-        validationResult.error.errors,
-      );
-      throw new Error(
-        "[TTS Client] Invalid service account credentials structure. Check console for details.",
-      );
-    }
-
-    const credentials = validationResult.data;
-
-    console.log(
-      "[TTS Client] Initializing with credentials from GOOGLE_APP_CREDS_JSON",
-    );
-    ttsGlobalClient = new TextToSpeechClient({ credentials });
-    return ttsGlobalClient;
-  } catch (error) {
-    console.error(
-      "[TTS Client] Failed to initialize TextToSpeechClient:",
-      error,
-    );
-    throw error;
-  }
-};
-// Content from ttsClient.ts ends here
+const TTS_ENDPOINT = "https://texttospeech.googleapis.com/v1/text:synthesize";
 
 const chirp3Voices = [
   "en-GB-Chirp3-HD-Aoede",
@@ -121,116 +54,78 @@ export interface SynthesizeSpeechResult {
   };
 }
 
+// Deterministically map a userId to a voice so each speaker is consistent.
 const getVoiceForUser = (userId: string): string => {
-  // Simple hash function to get a somewhat consistent number from a string
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
     const char = userId.charCodeAt(i);
     hash = (hash << 5) - hash + char;
-    hash |= 0; // Convert to 32bit integer
+    hash |= 0;
   }
   const voiceIndex = Math.abs(hash) % chirp3Voices.length;
   return chirp3Voices[voiceIndex];
 };
 
-async function performSynthesis(
-  ttsClient: TextToSpeechClient,
+const performSynthesis = async (
   text: string,
-  voiceName: string, // voiceName will always be determined before this call
+  voiceName: string,
   languageCode: string,
-): Promise<{ audioBase64?: string; error?: string }> {
+): Promise<{ audioBase64?: string; error?: string }> => {
   try {
-    const request = {
-      input: { text: text },
-      voice: {
-        name: voiceName,
-        languageCode: languageCode,
+    const token = await getGoogleAccessToken();
+    const res = await fetch(TTS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-      audioConfig: {
-        audioEncoding: "MP3" as const,
-      },
-    };
+      body: JSON.stringify({
+        input: { text },
+        voice: { name: voiceName, languageCode },
+        audioConfig: { audioEncoding: "MP3" },
+      }),
+    });
 
-    const [response] = await ttsClient.synthesizeSpeech(request);
-
-    if (!response.audioContent) {
-      console.error("[TTS Core] No audio content received from Google.");
-      return { error: "TTS synthesis failed: No audio content." };
+    if (!res.ok) {
+      const detail = await res.text();
+      console.error("[TTS] Google REST error:", res.status, detail);
+      return { error: `TTS synthesis failed: ${res.status}` };
     }
 
-    const audioBase64 = Buffer.from(
-      response.audioContent as Uint8Array,
-    ).toString("base64");
-    return { audioBase64: audioBase64 };
+    // The REST API returns audioContent already base64-encoded.
+    const data = (await res.json()) as { audioContent?: string };
+    if (!data.audioContent) {
+      return { error: "TTS synthesis failed: No audio content." };
+    }
+    return { audioBase64: data.audioContent };
   } catch (error) {
-    console.error("[TTS Core] Google Cloud TTS Error:", error);
+    console.error("[TTS] Synthesis error:", error);
     return {
       error: error instanceof Error ? error.message : "TTS synthesis failed.",
     };
   }
-}
+};
 
 export const synthesizeSpeechAction = async (
   params: SynthesizeSpeechParams,
 ): Promise<SynthesizeSpeechResult> => {
   const ttsEnabled = process.env["NEXT_PUBLIC_TTS_ENABLED"] !== "false";
   if (!ttsEnabled) {
-    return { audioBase64: "", error: "TTS is disabled." }; // Return empty audio or a specific indicator
+    return { audioBase64: "", error: "TTS is disabled." };
   }
 
   const validationResult = SynthesizeSpeechParamsSchema.safeParse(params);
-
   if (!validationResult.success) {
     console.error(
       "[TTS Action] Invalid parameters:",
       validationResult.error.flatten(),
     );
-    return {
-      error: `Invalid parameters: ${validationResult.error.flatten().fieldErrors}`,
-    };
+    return { error: "Invalid parameters." };
   }
 
   const { text, userId, voiceName: preferredVoiceName } = validationResult.data;
+  const voiceName = preferredVoiceName || getVoiceForUser(userId);
+  const languageCode = voiceName.split("-").slice(0, 2).join("-");
 
-  // const session = await getSession();
-  // if (!session?.user) {
-  //   console.warn('[TTS Action] Unauthorized attempt.');
-  //   return { error: 'Unauthorized: User must be logged in.' };
-  // }
-
-  // const ttsLimitCheck = await checkTTSRateLimit();
-  // if (!ttsLimitCheck.success) {
-  //   console.warn(`[TTS Action] Rate limit exceeded for user. Error: ${ttsLimitCheck.errorMessage}`);
-  //   return {
-  //     rateLimitError: {
-  //       message: ttsLimitCheck.errorMessage ?? 'TTS rate limit exceeded.',
-  //       resetTimestamp: ttsLimitCheck.reset,
-  //     },
-  //   };
-  // }
-
-  try {
-    const ttsClient = initializeTTSClientInternal();
-    const voiceName = preferredVoiceName || getVoiceForUser(userId);
-    const languageCode = voiceName.split("-").slice(0, 2).join("-"); // Derive language code from voice name
-
-    const synthesisResult = await performSynthesis(
-      ttsClient,
-      text,
-      voiceName,
-      languageCode,
-    );
-    return synthesisResult;
-  } catch (error) {
-    console.error(
-      "[TTS Action] Unexpected error during synthesis process:",
-      error,
-    );
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "TTS synthesis failed due to an unexpected error.",
-    };
-  }
+  return performSynthesis(text, voiceName, languageCode);
 };

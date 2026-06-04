@@ -1,9 +1,7 @@
 "use server";
 
-import fs from "fs";
-import path from "path";
-
 import { GenerationConfig } from "@google/genai";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 
@@ -19,22 +17,21 @@ import {
 
 export type ChatHistory = z.infer<typeof MessageSchema>[];
 
-const postChatMessageToEvents = (message: Message): void => {
-  const appUrl = process.env["NEXT_PUBLIC_APP_URL"];
-  if (!appUrl) {
-    console.error(
-      "EventService: NEXT_PUBLIC_APP_URL is not defined. Cannot post message.",
-    );
-    return;
+// Broadcast a chat message through the EventHub Durable Object (the single
+// real-time authority). Best-effort: failures are logged, not thrown, so a
+// missing binding during `next dev` doesn't break the AI loop.
+const postChatMessageToEvents = async (message: Message): Promise<void> => {
+  try {
+    const { env } = getCloudflareContext();
+    const stub = env.EVENT_HUB.get(env.EVENT_HUB.idFromName("global"));
+    await stub.fetch("https://event-hub/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...message, type: "chatMessage" as const }),
+    });
+  } catch (error) {
+    console.error("EventService: Failed to broadcast via EVENT_HUB:", error);
   }
-
-  fetch(`${appUrl}/api/events`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...message, type: "chatMessage" as const }),
-  }).catch((fetchError) => {
-    console.error("EventService: Fetch to /api/events failed:", fetchError);
-  });
 };
 
 export const generateAiChatMessage = async (
@@ -68,7 +65,7 @@ export const generateAiChatMessage = async (
         text: aiResponseText.trim(),
         timestamp: Date.now(),
       };
-      postChatMessageToEvents(aiMessage);
+      await postChatMessageToEvents(aiMessage);
       return aiMessage;
     }
     console.log(`AI Chat: ${agentName} did not return a response.`);
@@ -99,22 +96,6 @@ export const generateAiActionAndChat = async (
   if (!base64ImageData) {
     console.error("AI Action/Chat: Invalid image data URL format.");
     return undefined;
-  }
-
-  try {
-    const debugImagesDir = path.join(process.cwd(), "debug_images");
-    if (!fs.existsSync(debugImagesDir)) {
-      fs.mkdirSync(debugImagesDir, { recursive: true });
-    }
-    const imageName = `${aiAgentId}_${Date.now()}.png`;
-    const imagePath = path.join(debugImagesDir, imageName);
-    const imageBuffer = Buffer.from(base64ImageData, "base64");
-    fs.writeFileSync(imagePath, imageBuffer);
-  } catch (error) {
-    console.error(
-      `AI Action/Chat: Failed to save debug image for ${agentDisplayName}:`,
-      error,
-    );
   }
 
   const historySlice = chatHistory;
@@ -285,7 +266,7 @@ Your response:`;
           timestamp: Date.now(),
           audioSrc: audioSrcGenerated,
         };
-        postChatMessageToEvents(aiChatMessage);
+        await postChatMessageToEvents(aiChatMessage);
       }
 
       await new Promise((resolve) => setTimeout(resolve, 5000));

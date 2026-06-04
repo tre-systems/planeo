@@ -1,17 +1,12 @@
-import withPWA from "next-pwa";
-
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  output: "standalone",
-};
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-const pwaConfig = {
-  dest: "public",
-  register: true,
-  skipWaiting: true,
-};
+const nextConfig: NextConfig = {};
 
-const isDevelopment = process.env.NODE_ENV === "development";
+// Gives `next dev` access to Cloudflare bindings (e.g. the EVENT_HUB Durable
+// Object) via getCloudflareContext(). The full Workers runtime — including the
+// real-time hub at /api/events — is exercised by `npm run preview`.
+initOpenNextCloudflareForDev();
 
-export default isDevelopment ? nextConfig : withPWA(pwaConfig)(nextConfig);
+export default nextConfig;

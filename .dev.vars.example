@@ -1,0 +1,11 @@
+# Local Worker secrets for `npm run preview` and `next dev`.
+# Copy to .dev.vars and fill in. Never commit .dev.vars.
+# In production these are set with `wrangler secret put <NAME>`.
+
+NEXTJS_ENV=development
+
+# Gemini text + vision (required for AI agents to think/speak).
+GOOGLE_AI_API_KEY=
+
+# Google Cloud service-account JSON (single line) for Cloud TTS. Optional.
+GOOGLE_APP_CREDS_JSON=

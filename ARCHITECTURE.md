@@ -11,17 +11,19 @@ This document describes how the running system fits together. For per-feature
 detail see [`docs/`](docs/); for known gaps and planned work see
 [`docs/BACKLOG.md`](docs/BACKLOG.md).
 
-## The one constraint that shapes everything: single instance
+## The one thing that shapes everything: a single Durable Object authority
 
-All cross-client state lives in **plain in-memory module globals** on the
-server — `eyes`, `boxes`, and `subs` Maps/Sets in
-[`src/app/api/events/sseStore.ts`](src/app/api/events/sseStore.ts). There is no
-Redis, database, or pub/sub. A broadcast only reaches clients connected to the
-**same** server process, box state is per-process, and the `purgeStale`
-interval runs per-process. The app is therefore correct only when pinned to a
-single instance — which is exactly how [`fly.toml`](fly.toml) configures it
-(`max_machines_running = 1`). Scaling horizontally would require a shared
-backing store first. There is no persistence: nothing survives a restart.
+All cross-client state lives in **one Durable Object**, the `EventHub` in
+[`src/server/eventHub.ts`](src/server/eventHub.ts). The Worker always resolves it
+by the same name (`idFromName("global")`), so there is exactly one instance, and
+it is the single authority for the shared world: every connected client's eye,
+the physics boxes, and the set of open SSE connections. That state is held in
+plain instance fields (`eyes`, `boxes`, `subs`) — **in-memory and ephemeral**:
+no world state is written to storage, so it lives only while the DO is active.
+There is no Redis, database, or pub/sub, and none is needed — the Durable Object
+**is** the shared-state primitive. A broadcast reaches every subscriber on that
+one instance. To run multiple independent worlds you would shard by DO name
+(one `idFromName(world)` per world); each is its own isolated authority.
 
 ## Codebase map
 
@@ -33,11 +35,14 @@ backing store first. There is no persistence: nothing survives a restart.
 | `src/app/components/`          | Scene-level R3F components: `Eye`/`Eyes` (agents + users), `Box` (physics cubes), `AIAgentViews` (HUD thumbnails), `StartOverlay`.                                             |
 | `src/components/`              | DOM chat UI: `ChatWindow`, `ChatMessage`, `ChatInput`.                                                                                                                         |
 | `src/hooks/`                   | `useEventSource` (SSE in), `useEyePositionReporting` (position out), `useEyesDataSynchronizer`, `useAIAgentController` (agent vision + decisions), `useAiChat` (text replies). |
-| `src/app/actions/`             | Server actions: `generateMessage.ts` (AI vision/action/chat), `aiControllerActions.ts` (`requestAiDecision` wrapper), `tts.ts` (Google Cloud TTS).                             |
-| `src/app/api/events/`          | `route.ts` (SSE GET + event POST) and `sseStore.ts` (the in-memory hub).                                                                                                       |
-| `src/lib/`                     | `googleAI.ts` (Gemini client + model selection), `audioService.ts`, `env.ts`.                                                                                                  |
+| `src/app/actions/`             | Server actions: `generateMessage.ts` (AI vision/action/chat), `aiControllerActions.ts` (`requestAiDecision` wrapper), `tts.ts` (Google Cloud TTS via REST).                    |
+| `src/server/eventHub.ts`       | The `EventHub` Durable Object: the single real-time authority (eyes, boxes, open SSE connections) and the SSE endpoint handler.                                                |
+| `worker.ts`                    | Custom Worker entry: re-exports `EventHub`, routes `/api/events` to the DO, delegates everything else to the Next.js app.                                                      |
+| `src/lib/`                     | `googleAI.ts` (Gemini client + model selection), `googleAuth.ts` (Web Crypto OAuth token for Google Cloud), `audioService.ts`, `env.ts`.                                       |
 | `src/stores/`                  | Zustand stores (see below).                                                                                                                                                    |
 | `src/domain/`                  | Zod schemas and shared constants (the data contracts).                                                                                                                         |
+| `wrangler.jsonc`               | Worker config: `main = worker.ts`, the `EVENT_HUB` Durable Object binding + migration, non-secret `vars`.                                                                      |
+| `open-next.config.ts`          | `@opennextjs/cloudflare` adapter config (default in-memory cache).                                                                                                             |
 
 ## Render & input
 
@@ -56,19 +61,23 @@ Rotation is yaw-only and the camera's Y is locked to `EYE_Y_POSITION` (-11.9).
 
 ## Real-time layer (SSE)
 
-[`route.ts`](src/app/api/events/route.ts) exposes one endpoint:
+The [`EventHub`](src/server/eventHub.ts) Durable Object both holds the world
+state and serves the SSE endpoint. [`worker.ts`](worker.ts) is the Worker entry:
+it routes `/api/events` straight to the one DO stub (`idFromName("global")`) and
+delegates every other request to the Next.js app. The DO's `fetch` handles two
+methods:
 
 - **`GET /api/events`** opens an SSE stream (`text/event-stream`). On connect it
-  initializes the configured AI agents' eye positions
-  (`agents.slice(0, TOTAL_AGENTS)`, spread along X) and `subscribe`s the writer,
-  which replays the current eyes and boxes to the new client.
+  initializes the boxes once, seeds the configured AI agents' eye positions
+  (`agents.slice(0, TOTAL_AGENTS)`, spread along X), registers the writer as a
+  subscriber, and replays the current eyes and boxes to the new client.
 - **`POST /api/events`** validates the body against `EventSchema` and dispatches:
   `eyeUpdate → setEye`, `chatMessage → broadcast`, `boxUpdate → setBox`.
 
-[`sseStore.ts`](src/app/api/events/sseStore.ts) is the hub: `eyes`, `boxes`, and
-`subs` in-memory collections; `broadcast` writes `data:<json>\n\n` to every live
-subscriber; `setBox` preserves a box's color across updates; `purgeStale` (every
-10 s) drops eyes idle for more than 30 s. Boxes are created once from
+Inside the DO, `eyes`, `boxes`, and `subs` are in-memory collections; `broadcast`
+writes `data:<json>\n\n` to every live subscriber; `setBox` preserves a box's
+color across updates; a recurring DO `alarm` (every 10 s) runs `purgeStale`,
+which drops eyes idle for more than 30 s. Boxes are created once from
 `NUMBER_OF_BOXES` at positions `[i*15 - (N-1)*7.5, 5, -20]` with colors cycled
 from a 12-entry palette.
 
@@ -120,10 +129,10 @@ side: it builds the agent's "newly-awakened, disoriented" persona prompt, calls
 Gemini with `responseMimeType: "application/json"` (`temperature 0.4`,
 `maxOutputTokens 150`), strips code fences, and validates the result against
 `AIResponseSchema` (`{ chatMessage?, action, audioSrc? }`). If there's a chat
-message it broadcasts it. It then **awaits a fixed `setTimeout(5000)` before
-returning** — this server-side pause, not any client constant, is what
-effectively paces each agent to roughly one action every ~5 s. It also writes
-every captured frame to a `debug_images/` directory on the server.
+message it broadcasts it to the `EventHub` DO via the `EVENT_HUB` binding
+(`getCloudflareContext().env`). It then **awaits a fixed `setTimeout(5000)`
+before returning** — this server-side pause, not any client constant, is what
+effectively paces each agent to roughly one action every ~5 s.
 
 ### Text chat replies
 
@@ -137,12 +146,15 @@ most recent message is from the human user, after a `1500–2500 ms` delay it as
 There are two audio paths, and only one is live:
 
 - **Live:** [`tts.ts`](src/app/actions/tts.ts) `synthesizeSpeechAction` is real
-  Google Cloud TTS. It validates `GOOGLE_APP_CREDS_JSON`, deterministically
-  assigns each `userId` one of 24 Chirp3-HD voices (by hash), synthesizes MP3,
-  and returns base64. [`ChatMessage.tsx`](src/components/ChatMessage.tsx) calls
-  it client-side for each incoming message (skipping the user's own and
-  `/`-commands) and plays the audio. Disabled when `NEXT_PUBLIC_TTS_ENABLED` is
-  exactly `"false"`.
+  Google Cloud TTS, called over the **REST API**
+  (`texttospeech.googleapis.com`). Auth is an OAuth access token minted from the
+  `GOOGLE_APP_CREDS_JSON` service-account key with the Web Crypto API (RS256) in
+  [`googleAuth.ts`](src/lib/googleAuth.ts) — the gRPC `@google-cloud/*` client
+  cannot run on the Workers runtime. It deterministically assigns each `userId`
+  one of 24 Chirp3-HD voices (by hash), synthesizes MP3, and returns base64.
+  [`ChatMessage.tsx`](src/components/ChatMessage.tsx) calls it client-side for
+  each incoming message (skipping the user's own and `/`-commands) and plays the
+  audio. Disabled when `NEXT_PUBLIC_TTS_ENABLED` is exactly `"false"`.
 - **Vestigial:** [`audioService.ts`](src/lib/audioService.ts) `generateAudio`
   returns a hardcoded test clip (a T-Rex roar) and is stored as a message's
   `audioSrc` on the server, but the client never reads `audioSrc`. See
@@ -171,22 +183,45 @@ return — `turn` is clamped to 1–45°), `message`, `event` (the SSE union),
 
 ## Configuration
 
-| Variable                  | Required    | Purpose                                           | Default      |
-| ------------------------- | ----------- | ------------------------------------------------- | ------------ |
-| `GOOGLE_AI_API_KEY`       | for AI      | Gemini client (text + vision).                    | —            |
-| `NEXT_PUBLIC_APP_URL`     | for AI chat | Base URL server actions POST chat back to.        | —            |
-| `GOOGLE_APP_CREDS_JSON`   | for TTS     | Google Cloud service-account JSON for Chirp3 TTS. | —            |
-| `AI_AGENTS_CONFIG`        | no          | JSON array of `{ id, displayName }` agents.       | Orion + Nova |
-| `TOTAL_AGENTS`            | no          | How many agents get eye positions.                | `0`          |
-| `NUMBER_OF_BOXES`         | no          | Physics cubes to spawn.                           | `5`          |
-| `NEXT_PUBLIC_TTS_ENABLED` | no          | Set to `"false"` to disable TTS.                  | enabled      |
+Secrets (`GOOGLE_AI_API_KEY`, `GOOGLE_APP_CREDS_JSON`) are set with
+`wrangler secret put <NAME>` (or `.dev.vars` locally, copied from
+[`.dev.vars.example`](.dev.vars.example)). The non-secret world config lives in
+[`wrangler.jsonc`](wrangler.jsonc) `vars`. `NEXT_PUBLIC_TTS_ENABLED` is
+build-time (inlined by Next).
+
+| Variable                  | Required | Purpose                                           | Set via          | Default      |
+| ------------------------- | -------- | ------------------------------------------------- | ---------------- | ------------ |
+| `GOOGLE_AI_API_KEY`       | for AI   | Gemini client (text + vision).                    | secret           | —            |
+| `GOOGLE_APP_CREDS_JSON`   | for TTS  | Google Cloud service-account JSON for Chirp3 TTS. | secret           | —            |
+| `AI_AGENTS_CONFIG`        | no       | JSON array of `{ id, displayName }` agents.       | `wrangler.jsonc` | Orion + Nova |
+| `TOTAL_AGENTS`            | no       | How many agents get eye positions.                | `wrangler.jsonc` | `0`          |
+| `NUMBER_OF_BOXES`         | no       | Physics cubes to spawn.                           | `wrangler.jsonc` | `5`          |
+| `NEXT_PUBLIC_TTS_ENABLED` | no       | Set to `"false"` to disable TTS.                  | build-time env   | enabled      |
 
 ## Build & deploy
 
-`npm run build` produces a Next.js **standalone** output (`next.config.ts`),
-wrapped by `next-pwa` in production. The [`Dockerfile`](Dockerfile) is a
-multi-stage Node Alpine build that runs `server.js` from the standalone bundle.
-Deployment targets **Fly.io** (app `planeo`, region `lhr`, a single 256 MB
-machine that scales to zero). CI is [`.github/workflows/fly.yml`](.github/workflows/fly.yml):
-a `check` job (`npm run verify`) gates every push, and a `deploy` job ships to
-Fly on push to `main` once a `FLY_API_TOKEN` secret is present.
+The app runs on **Cloudflare Workers** via the
+[`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare) adapter.
+[`open-next.config.ts`](open-next.config.ts) configures the adapter and
+[`wrangler.jsonc`](wrangler.jsonc) the Worker — `main` is
+[`worker.ts`](worker.ts), with the `EVENT_HUB` Durable Object binding plus its
+`new_sqlite_classes` migration and the non-secret `vars`.
+
+- `npm run dev` — Next.js dev server (Turbopack, <http://localhost:3000>). It
+  serves the UI only; the real-time hub at `/api/events` lives in `worker.ts`
+  and the DO, which `next dev` does not run.
+- `npm run preview` — `opennextjs-cloudflare build && opennextjs-cloudflare preview`.
+  Runs the full Workers runtime locally, **including** the `EventHub` DO. Use
+  this to exercise real-time behavior.
+- `npm run deploy` — `opennextjs-cloudflare build && opennextjs-cloudflare deploy`.
+- `npm run cf-typegen` — `wrangler types`; rerun after editing `wrangler.jsonc`.
+
+The app is **not currently deployed**. CI is
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml): a `check` job
+(`npm run verify`) gates every push and PR, and a `deploy` job builds with
+OpenNext and ships via [`cloudflare/wrangler-action`](https://github.com/cloudflare/wrangler-action)
+on push to `main` — but only once `CLOUDFLARE_API_TOKEN` (and
+`CLOUDFLARE_ACCOUNT_ID`) secrets are set; without the token the deploy step is
+skipped. The deploy target is a `*.workers.dev` URL; a `planeo.tre.systems`
+custom domain is an optional one-line `routes`/`custom_domain` add in
+`wrangler.jsonc`, not yet configured.

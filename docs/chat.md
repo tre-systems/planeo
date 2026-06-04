@@ -2,22 +2,21 @@
 
 This document outlines the implementation of the chat feature in Planeo.
 
+See [ARCHITECTURE.md](../ARCHITECTURE.md) for the system overview.
+
 ## Overview
 
-The chat feature displays text messages from AI agents in real-time within the application. It consists of a chat window that displays these messages. By default, the chat window is hidden and can be toggled using a subtle button in the bottom-right corner of the screen.
+The chat feature displays text messages from the human user and AI agents in real-time within the application. It consists of a chat window that lists these messages and an input field for sending messages. By default, the chat window is hidden and can be toggled using a subtle button in the bottom-right corner of the screen.
 
 ## Components
 
-- **`Message` (Domain Model):** Defined in `src/domain/message.ts` using a Zod schema. It includes `id`, `userId`, `text`, and `timestamp` fields.
-- **`useMessageStore` (Zustand Store):** Located in `src/stores/messageStore.ts`. Manages the state of chat messages, including an array of `Message` objects and an `addMessage` action.
-- **`useChatStore` (Zustand Store):** Located in `src/stores/chatStore.ts`. Manages the visibility state of the chat window (`isChatVisible`) and provides a `toggleChatVisibility` action.
-- **`useCommunicationStore` (Zustand Store):** Located in `src/stores/communicationStore.ts`. This store combines the responsibilities of the previous `useMessageStore` and `useChatStore`. It manages:
-  - An array of `Message` objects (chat messages).
-  - An `addMessage` action to add new messages.
-  - The visibility state of the chat window (`isChatVisible`).
-  - A `toggleChatVisibility` action to show or hide the chat window.
-- **`ChatMessage` (React Component):** Found in `src/components/ChatMessage.tsx`. Displays an individual chat message, showing the user ID (or agent name) and message text.
-- **`ChatWindow` (React Component):** Located in `src/components/ChatWindow.tsx`. Renders the list of chat messages from AI agents. It no longer contains an input field for users to send messages.
+- **`Message` (Domain Model):** Defined in `src/domain/message.ts` using a Zod schema (`MessageSchema`). It includes `id` (uuid), `userId`, optional `name`, `text` (minimum length 1), `timestamp`, and optional `audioSrc` fields.
+- **`useCommunicationStore` (Zustand Store):** Located in `src/stores/communicationStore.ts`. It manages:
+  - An array of `Message` objects (chat messages) and an `addMessage` action to append new messages.
+  - The visibility state of the chat window (`isChatVisible`) and a `toggleChatVisibility` action.
+  - The chat input focus state (`isChatInputFocused`) and a `setChatInputFocused` action.
+- **`ChatMessage` (React Component):** Found in `src/components/ChatMessage.tsx`. Displays an individual chat message, showing the sender display name (`message.name`, the agent's display name for AI agent IDs, otherwise the `userId`) and the message text.
+- **`ChatWindow` (React Component):** Located in `src/components/ChatWindow.tsx`. Renders the list of chat messages and a `ChatInput`. When the user sends a message, it adds the message locally via `addMessage` and broadcasts it through the event store's `sendChatMessage`.
 - **`ChatToggleButton` (React Component):** Found in `src/app/components/ChatToggleButton.tsx`. A small, fixed button that allows the user to show or hide the `ChatWindow`.
 
 ## Integration
@@ -26,7 +25,7 @@ The `ChatWindow` component is integrated into the main application page (`src/ap
 
 ## Simulation Start
 
-To ensure browser audio policies are respected (allowing AI agent speech to play), the main 3D simulation now requires a user interaction to start. A `StartOverlay` component is displayed initially, and the user must click it to begin the experience. This is managed by the `useSimulationStore`.
+To ensure browser audio policies are respected (allowing AI agent speech to play), the main 3D simulation requires a user interaction to start. A `StartOverlay` component is displayed initially, and the user must click it to begin the experience. This is managed by the `useSimulationStore`.
 
 ## Future Enhancements
 

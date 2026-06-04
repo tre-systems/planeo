@@ -14,9 +14,9 @@ Planeo is an interactive 3D web application where users and AI agents coexist an
 
 - **3D Environment:** Interactive 3D space built with React Three Fiber.
 - **Real-time Multi-user Interaction:** See other users' movements (represented as eyeballs) in real-time using Server-Sent Events (SSE).
-- **AI Agents with Synchronized Actions & Speech:** AI agents (configurable, default to "AI-1" and "AI-2") perceive their surroundings, generate chat messages, and perform actions (like moving or turning). Their actions are synchronized with audio playback of their speech, and their visual perspective is updated at ~10 FPS. ([Details](/docs/ai-agents.md), [Vision Details](/docs/ai-agent-vision.md), [Interaction Flow](/docs/ai-interaction-flow.md))
+- **AI Agents with Vision, Actions & Speech:** AI agents (configurable, default to "Orion" and "Nova") perceive their surroundings, generate chat messages, and perform actions (like moving or turning). Their visual perspective is updated at ~10 FPS and a Gemini decision is made roughly every few seconds. ([Details](/docs/ai-agents.md), [Vision Details](/docs/ai-agent-vision.md), [Interaction Flow](/docs/ai-interaction-flow.md))
 - **Chat Functionality:** View messages from AI agents in a shared chat window. ([Details](/docs/chat.md))
-- **Text-to-Speech (TTS):** Chat messages from AI agents can be spoken aloud. Currently, this uses a test audio track for development. A full Google Cloud TTS integration is prototyped. ([Details](/docs/text-to-speech.md), `src/lib/audioService.ts`)
+- **Text-to-Speech (TTS):** AI chat messages are spoken aloud using Google Cloud TTS (Chirp3 voices), with a distinct voice assigned per speaker. Requires `GOOGLE_APP_CREDS_JSON`; disable by setting `NEXT_PUBLIC_TTS_ENABLED=false`. ([Details](/docs/text-to-speech.md))
 - **Keyboard Navigation:** Control your camera movement and orientation using keyboard inputs.
 - **Physics-based World:** Interact with objects like falling cubes in an environment governed by physics. ([Details](/docs/physics.md))
 - **Randomized Cube Art:** Falling cubes display random artwork from a local collection on one face. ([Details](/docs/cube-art-textures.md))
@@ -64,7 +64,7 @@ Follow these instructions to set up and run Planeo on your local machine.
       - _Used by: `src/app/actions/generateMessage.ts` for SSE event posting._
     - `GOOGLE_AI_API_KEY`: Your API key for Google Generative AI (e.g., Gemini).
       - _Used by: `src/lib/googleAI.ts` for AI text and vision model interactions._
-    - `AI_AGENTS_CONFIG` (Optional): JSON string to define custom AI agents. If not set, defaults to two agents ("AI-1", "AI-2").
+    - `AI_AGENTS_CONFIG` (Optional): JSON string to define custom AI agents. If not set, defaults to two agents (Orion and Nova).
       - _Example: `AI_AGENTS_CONFIG='[{"id":"custom-ai-1","displayName":"Custom AI Alpha"},{"id":"custom-ai-2","displayName":"Custom AI Beta"}]'`_
       - _Used by: `src/domain/aiAgent.ts`, `src/app/api/events/route.ts`._
       - See `docs/ai-agents.md` for more details.
@@ -111,9 +111,12 @@ Follow these instructions to set up and run Planeo on your local machine.
 
 ## Technical Documentation
 
-More detailed technical documentation for various aspects of the project can be found in the `docs/` folder:
+Start with [`ARCHITECTURE.md`](ARCHITECTURE.md) for the system overview, codebase map, and the SSE wire protocol. [`AGENTS.md`](AGENTS.md) holds the contributor/agent workflow, and [`docs/BACKLOG.md`](docs/BACKLOG.md) tracks known limitations and planned work.
+
+More detailed per-feature documentation can be found in the `docs/` folder:
 
 - `docs/ai-agents.md`: Details on AI agent behavior, configuration, and capabilities.
+- `docs/ai_services.md`: How the Gemini text and vision models are wired up.
 - `docs/ai-agent-vision.md`: Describes how AI agents perceive and display their environment.
 - `docs/chat.md`: Overview of the chat system.
 - `docs/physics.md`: Explanation of the physics simulation for objects in the 3D scene.
@@ -149,10 +152,3 @@ Please ensure your code adheres to the project's linting rules (`npm run lint`) 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Environment Variables
-
-- `REPLICATE_API_TOKEN`: Your Replicate API token.
-- `TOTAL_AGENTS`: The maximum number of agents allowed in the environment (e.g., 10).
-
-### Environment Variables for Production

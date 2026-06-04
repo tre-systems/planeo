@@ -1,57 +1,48 @@
 # AI Interaction Flow
 
-This document outlines the updated interaction flow for AI agents within the Planeo application, focusing on how actions, chat messages, and audio playback are synchronized.
+This document describes the interaction flow for AI agents within the Planeo application: how an agent's view is captured, how it decides on an action and a chat message, and how those are applied and shared. See [ARCHITECTURE.md](../ARCHITECTURE.md) for the system overview.
 
 ## Overview
 
-The previous AI interaction model involved the AI generating a chat message, which was then processed for Text-to-Speech (TTS), and separately, actions might be inferred or directly generated. The new model tightens this loop, ensuring that an AI agent completes its spoken message and associated action before a new decision cycle is initiated for that agent.
+Each AI agent runs a vision-driven loop on the client. It renders the scene from the agent's own viewpoint, sends that image plus recent chat history to a server action, and applies the action the model returns. Chat messages are broadcast to every client over Server-Sent Events (SSE).
 
 ## Core Interaction Loop
 
-The flow for each AI agent generally follows these steps:
+The flow for each AI agent (other than the local user) is driven by `useAIAgentController` (`src/hooks/useAIAgentController.ts`):
 
-1.  **Client-Side Trigger:** An agent becomes ready for a new decision. This readiness is now primarily determined by the completion of audio playback for its previous chat message (or if it had no message to speak).
+1.  **Decision Gating (Client):** A single `useFrame` checks each agent against `DECISION_MAKING_INTERVAL_MS` (500 ms). A per-agent in-flight lock (`decisionProcessingLock`) prevents a new request from starting while the previous one for that agent is still outstanding.
 
-2.  **Visual Data Capture (Client):** The client captures the current visual information from the specific AI agent's perspective (e.g., a screenshot of its view in the 3D world).
+2.  **Visual Data Capture (Client):** The agent's offscreen `PerspectiveCamera` is positioned at its eye, the scene is rendered into a `320×200` `WebGLRenderTarget`, and the pixels are read back, vertically flipped, and converted to a PNG data URL.
 
 3.  **Request to Backend (Client -> Server):**
 
-    - The client sends the captured image data and the current chat history to the `generateAiActionAndChat` server action.
-    - It's crucial that the chat history sent is as up-to-date as possible to provide the LLM with the latest conversational context.
+    - The client calls the `requestAiDecision` server action (`src/app/actions/aiControllerActions.ts`) with the agent ID, the captured image data URL, and the last 10 chat messages.
+    - `requestAiDecision` delegates to `generateAiActionAndChat` (`src/app/actions/generateMessage.ts`) and returns just the `action` to the client.
 
 4.  **LLM Processing (Server):**
 
-    - The `generateAiActionAndChat` function on the server constructs a prompt for the Google Generative AI model (e.g., Gemini).
-    - This prompt includes the system instructions, the agent's current visual data (image), and the provided chat history.
-    - The LLM is instructed to return a JSON object containing:
+    - `generateAiActionAndChat` builds a system prompt (a "newly-awakened, disoriented" persona) and calls the Google Generative AI vision model (`gemini-1.5-flash-latest`) with `responseMimeType: "application/json"`, the agent's current image, and the chat history.
+    - The model is instructed to return a JSON object containing:
       - `chatMessage` (optional): A brief text message for the agent to say.
-      - `action`: An object describing the action the agent should take (e.g., `{ "type": "move", "direction": "forward", "distance": 1 }` or `{ "type": "turn", "direction": "left", "degrees": 30 }`).
+      - `action`: One of `{ "type": "move", "direction": "forward" | "backward", "distance": number }`, `{ "type": "turn", "direction": "left" | "right", "degrees": number }`, or `{ "type": "none" }`.
+    - The response text has any code fences stripped and is validated against `AIResponseSchema` (`src/domain/aiAction.ts`); `turn` degrees are clamped to 1–45. Invalid responses are discarded and the action defaults to `none`.
 
-5.  **Audio Generation (Server):**
+5.  **Chat Broadcast (Server via SSE):** If the validated response includes a `chatMessage`, the server constructs a `Message` and posts it to `/api/events`, which broadcasts it to all connected clients over SSE so it appears in the shared chat UI.
 
-    - If the LLM response includes a `chatMessage`, the server calls the `generateAudio` function (from `src/lib/audioService.ts`).
-    - Currently, for development and testing, this service returns a URL to a standard test audio file (e.g., a T-Rex roar) instead of generating unique TTS for each message.
-    - The `audioSrc` (URL to the audio file) is added to the response object.
+6.  **Server-Side Pause:** Before returning, `generateAiActionAndChat` awaits a fixed `setTimeout(5000)`. This pause, combined with the per-agent in-flight lock on the client, is what paces each agent to roughly one action every ~5 seconds.
 
-6.  **Response to Client (Server -> Client):** The server action returns the LLM's `action`, the `chatMessage`, and the `audioSrc` to the client.
+7.  **Apply Action (Client):** When `requestAiDecision` resolves, the client applies the action to the agent's eye in the 3D world — `move` translates along the forward vector by `distance × 10`; `turn` rotates the look-at about the Y axis by `degrees`. The agent's new position is reported back to the server over SSE as an `eyeUpdate`.
 
-7.  **Client-Side Orchestration:** A client-side component (conceptually, the `AIInteractionOrchestrator` or similar logic) manages the following sequence for the specific agent:
+## Pacing
 
-    - **Apply Action:** The `action` received from the server is immediately applied to the game state (e.g., the AI agent's model in the 3D world is moved or rotated).
-    - **Play Audio:** If an `audioSrc` is present, the audio is played using an HTMLAudioElement.
-    - **Wait for Audio Completion:** The orchestrator listens for the `onended` event of the audio element.
-    - **Trigger Next Cycle:** Only _after_ the `onended` event fires (or if there was no audio to play), the orchestrator considers the current cycle complete for that agent and initiates a new cycle by returning to Step 1 (or Step 2 directly).
+- **Server-side pause:** The `setTimeout(5000)` in `generateAiActionAndChat` is the dominant pacing mechanism, spacing out an agent's actions and chat.
+- **In-flight lock:** `useAIAgentController` keeps a per-agent lock so it never issues a new decision request while one is still in flight, preventing overlapping requests and rapid cycling.
 
-8.  **Chat Message Broadcast (Server via SSE):** Concurrently with step 5 & 6, if a `chatMessage` was generated by the LLM, the `postChatMessageToEvents` function is called on the server. This broadcasts the chat message to all connected clients via Server-Sent Events (SSE), allowing it to appear in the shared chat UI.
+## Audio
 
-## Benefits of this Flow
+The action loop does not drive audio playback. The `Message` schema carries an optional `audioSrc`, but the client never reads it. Spoken audio is handled independently by `ChatMessage.tsx` (`src/components/ChatMessage.tsx`), which calls the `synthesizeSpeechAction` Text-to-Speech server action (`src/app/actions/tts.ts`) for each incoming message it displays (skipping the user's own messages and `/`-commands) and plays the returned audio. See [ARCHITECTURE.md](../ARCHITECTURE.md) for the two audio paths.
 
-- **Synchronization:** Actions and spoken words are more closely tied. An agent acts, and then its corresponding line is "spoken." The next turn for that agent waits for the speech to finish.
-- **Controlled Pacing:** Prevents agents from making new decisions and speaking again before their previous utterance has finished, leading to a more natural and understandable interaction pace.
-- **Reduced Rapid Cycling:** Avoids overwhelming the LLM with too-frequent requests that could occur if decisions were made without waiting for audio.
+## Notes
 
-## Client-Side Implementation Notes
-
-- A central orchestrator logic (like the `AIInteractionOrchestrator.tsx` component proposed) is recommended to manage the state for each AI agent (e.g., `isProcessing`, `isWaitingForAudio`).
-- It's essential to correctly handle the `onended` and `onerror` events of the HTMLAudioElement to control the loop.
-- Fetching the most recent chat history from a shared client-side store (updated by SSE) just before making the request to the backend is critical for providing good conversational context to the LLM.
+- Fetching the most recent chat history (`getMessages.slice(-10)`) just before each request gives the model up-to-date conversational context.
+- The image captured for the live HUD thumbnail and the image sent for a decision are produced by the same render path; only the decision path forwards the image to the model.

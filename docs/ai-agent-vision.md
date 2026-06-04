@@ -1,6 +1,6 @@
 # AI Agent Vision System
 
-This document details the implementation of the AI agent vision system in Planeo, focusing on how AI agents perceive and display their environment.
+This document details the implementation of the AI agent vision system in Planeo, focusing on how AI agents perceive and display their environment. See [ARCHITECTURE.md](../ARCHITECTURE.md) for the system overview.
 
 ## Overview
 
@@ -11,8 +11,8 @@ AI agents in Planeo have their own virtual cameras within the 3D scene. These ca
 - **Capture Mechanism**: The `useAIAgentController` hook (`src/hooks/useAIAgentController.ts`) is responsible for managing AI agents' vision.
 
   - Each AI agent has a dedicated `PerspectiveCamera` and a `WebGLRenderTarget`.
-  - The visual representation (what the AI "sees") is updated frequently, controlled by `VISUAL_UPDATE_INTERVAL_MS` (currently 100 milliseconds, aiming for ~10 FPS). This involves rendering the scene from the AI's perspective and updating the displayed image.
-  - The AI's decision-making process, which includes calling an LLM, happens less frequently, controlled by `DECISION_MAKING_INTERVAL_MS` (currently 7000 milliseconds). This ensures that visual updates are fast and fluid, while LLM calls are made at a more controlled rate.
+  - The visual representation (what the AI "sees") is updated frequently, controlled by `VISUAL_UPDATE_INTERVAL_MS` (100 milliseconds, aiming for ~10 FPS). This involves rendering the scene from the AI's perspective and updating the displayed image.
+  - The AI's decision-making process, which includes calling an LLM, is gated by `DECISION_MAKING_INTERVAL_MS` (500 milliseconds) plus a per-agent in-flight lock, so a new decision is only started once the previous one for that agent has returned. The effective pacing of roughly one action every ~5 seconds per agent comes from a fixed `setTimeout(5000)` pause that the `generateAiActionAndChat` server action awaits before returning (`src/app/actions/generateMessage.ts`), not from the interval constant. This keeps visual updates fast and fluid while spacing out LLM calls.
   - The rendered image for both visual updates and decision-making is converted to a data URL (PNG format).
 
 - **State Management**: The generated image data URL for each AI agent (from the frequent visual updates) is stored in a Zustand store (`useAIVisionStore` in `src/stores/aiVisionStore.ts`) using the `setAIAgentView` action.
@@ -24,7 +24,7 @@ AI agents in Planeo have their own virtual cameras within the 3D scene. These ca
 
 ## Real-time Experience
 
-The `VISUAL_UPDATE_INTERVAL_MS` in `useAIAgentController.ts` dictates the frequency of the displayed view updates, providing a near real-time feed. The `DECISION_MAKING_INTERVAL_MS` controls how often the AI processes this visual information (along with chat history) to make decisions and perform actions. This separation ensures responsive visuals without overloading the AI decision-making services.
+The `VISUAL_UPDATE_INTERVAL_MS` in `useAIAgentController.ts` dictates the frequency of the displayed view updates, providing a near real-time feed. Decision-making runs on a separate, much slower cadence (the `DECISION_MAKING_INTERVAL_MS` check, the per-agent in-flight lock, and the server-side `setTimeout(5000)` pause), processing the visual information along with chat history to make decisions and perform actions. This separation ensures responsive visuals without overloading the AI decision-making services.
 
 This ensures that the views displayed are an accurate representation of what each AI agent's virtual camera is capturing from the scene, updated frequently.
 

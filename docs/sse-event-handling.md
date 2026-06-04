@@ -1,5 +1,7 @@
 # Server-Sent Events (SSE) and State Synchronization
 
+See [ARCHITECTURE.md](../ARCHITECTURE.md) for the system overview.
+
 This document outlines the Server-Sent Events (SSE) mechanism used for real-time communication between the server and clients, focusing on how entity states like "eyes" (user avatars/views) and "boxes" (interactive cubes) are managed and synchronized.
 
 ## Overview
@@ -8,7 +10,9 @@ The core of the real-time communication is handled by the API endpoint `/api/eve
 
 - **SSE Connection**: Clients connect via a `GET` request.
 - **Event Broadcasting**: The server broadcasts events to all connected clients.
-- **State Management**: Server-side state for entities is primarily managed in `src/app/api/events/sseStore.ts`.
+- **State Management**: Server-side state for entities is managed in `src/app/api/events/sseStore.ts`.
+
+All cross-client state (`eyes`, `boxes`, `subs`) lives in plain in-memory module globals in `sseStore.ts`. There is no shared store, database, or pub/sub, and nothing is persisted: a broadcast only reaches clients connected to the same server process, and all state is lost on restart. The app is therefore correct only when pinned to a single instance, and scaling horizontally would require a shared backing store first.
 
 ## Event Types
 
@@ -17,7 +21,7 @@ Several event types are pushed to clients:
 - `eyeUpdate`: Indicates a change in an eye's position (`p`) or look-at point (`l`).
 - `box`: Indicates the current state (position `p`, orientation `o`, color `c`) of a box. This event is sent for initial state and for subsequent updates.
 - `chatMessage`: Transmits chat messages between users.
-- `aiVision`: (Primarily server-to-server or internal) Carries image data for AI vision processing.
+- `aiVision`: Accepted by `EventSchema` but has **no `POST` handler** in `route.ts` — it is a dead path. The human-camera capture posted from `Scene.tsx` is validated and then discarded. The live AI vision path is the `requestAiDecision` server action, not this event.
 
 ## Box State Synchronization (Cubes)
 
@@ -74,11 +78,4 @@ Interactive cubes, referred to as "boxes" in the codebase, are a key part of the
 - `eyeUpdate` events carry `id`, `p` (position), `l` (look-at point), and `t` (timestamp).
 - Initial eye states (including AI agents) are sent to new subscribers.
 - Updates are broadcast when an eye's position or look-at point changes via the `setEye` function in `sseStore.ts`.
-
-## Implications of Changes
-
-- **Color Consistency**: Boxes now have a server-defined, persistent color. Clients should use this color, ensuring all users see identical box colors.
-- **Position Synchronization**: The mechanism for broadcasting box position and orientation updates remains. If desynchronization of positions is still observed, investigation should focus on:
-  - Client-side logic for sending updates (especially if multiple boxes are affected by one action, like "scattering").
-  - Client-side logic for processing received "box" events.
-  - Potential for very high-frequency updates or large numbers of boxes impacting performance or perceived synchronization.
+- `purgeStale` (run every 10 s) drops any eye that has been idle for more than 30 s.

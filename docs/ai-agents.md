@@ -1,6 +1,6 @@
 # AI Agents
 
-This document outlines the architecture and functionality of the AI agents within the Planeo application.
+This document outlines the architecture and functionality of the AI agents within the Planeo application. See [ARCHITECTURE.md](../ARCHITECTURE.md) for the system overview.
 
 ## Overview
 
@@ -17,7 +17,7 @@ AI agent definitions are managed in `src/domain/aiAgent.ts`. This file provides:
       ```env
       AI_AGENTS_CONFIG='[{"id":"custom-ai-1","displayName":"Custom AI Alpha"},{"id":"custom-ai-2","displayName":"Custom AI Beta"}]'
       ```
-  - If `AI_AGENTS_CONFIG` is not set, is empty, or contains invalid JSON, the system defaults to two AI agents: `{"id":"ai-agent-1","displayName":"AI-1"}` and `{"id":"ai-agent-2","displayName":"AI-2"}`.
+  - If `AI_AGENTS_CONFIG` is not set, is empty, or contains invalid JSON, the system defaults to two AI agents: `{"id":"ai-agent-1","displayName":"Orion"}` and `{"id":"ai-agent-2","displayName":"Nova"}`.
   - These default agents will have their eyeball positions initialized in the 3D world automatically when a user connects.
 - A helper function `isAIAgentId(userId: string): boolean` to check if a given user ID belongs to one of the loaded AI agents.
 - A helper function `getAIAgentById(userId: string): AIAgent | undefined` to retrieve the full details of a specific AI agent by its ID.
@@ -34,7 +34,7 @@ When an AI agent generates a chat message, the prompt history provided to the un
 
 ### Vision Response and Actions
 
-Based on visual input and chat history, AI agents decide on both a chat message and a physical action. Possible actions include moving, turning, and looking at other entities.
+Based on visual input and chat history, AI agents decide on both a chat message and a physical action. The possible actions are `move` (forward or backward by a distance), `turn` (left or right, in degrees), and `none`.
 
 ### Persona
 

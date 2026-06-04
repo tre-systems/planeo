@@ -10,6 +10,8 @@
 
 Planeo is an interactive 3D web application where users and AI agents coexist and interact in a shared environment. It showcases real-time multi-user communication, AI-driven agents with vision and speech capabilities, and a dynamic physics-based world.
 
+**Live:** <https://planeo.rob-gilks.workers.dev>
+
 ## Core Features
 
 - **3D Environment:** Interactive 3D space built with React Three Fiber.
@@ -120,10 +122,10 @@ npm run deploy
 ```
 
 Pushing to `main` also deploys automatically via GitHub Actions
-([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) once the
-`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets are set.
-The app deploys to a `*.workers.dev` URL; a `planeo.tre.systems` custom domain is
-an optional one-line addition to `wrangler.jsonc` and is not yet configured.
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) using the
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets. The app is live at
+<https://planeo.rob-gilks.workers.dev>; a `planeo.tre.systems` custom domain is an
+optional one-line addition to `wrangler.jsonc` and is not yet configured.
 
 Production secrets (`GOOGLE_AI_API_KEY`, `GOOGLE_APP_CREDS_JSON`) are set with
 `wrangler secret put <NAME>`.

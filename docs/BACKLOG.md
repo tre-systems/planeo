@@ -30,10 +30,9 @@ to look before "fixing" something that is already a tracked, intentional quirk.
 - **`next dev` serves the UI only.** The real-time hub (`/api/events` + the
   `EventHub` DO) is wired in `worker.ts` and only runs under the Workers runtime.
   Use `npm run preview` to exercise real-time locally.
-- **Not deployed; no custom domain.** CI deploys to a `*.workers.dev` URL on
-  push to `main` once `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` are set. The
-  `planeo.tre.systems` custom domain is an optional one-line `wrangler.jsonc` add
-  and is not yet configured.
+- **No custom domain yet.** The app is live at `planeo.rob-gilks.workers.dev`
+  (CI auto-deploys on push to `main`). A `planeo.tre.systems` custom domain is an
+  optional one-line `wrangler.jsonc` add and is not yet configured.
 - **PWA dropped.** `next-pwa` is removed, so there is no service worker /
   offline support (the `manifest.json` link in `layout.tsx` remains). It could
   be re-added with a Workers-compatible service worker such as Serwist.

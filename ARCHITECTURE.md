@@ -216,12 +216,11 @@ The app runs on **Cloudflare Workers** via the
 - `npm run deploy` — `opennextjs-cloudflare build && opennextjs-cloudflare deploy`.
 - `npm run cf-typegen` — `wrangler types`; rerun after editing `wrangler.jsonc`.
 
-The app is **not currently deployed**. CI is
+The app is live at <https://planeo.rob-gilks.workers.dev>. CI is
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml): a `check` job
 (`npm run verify`) gates every push and PR, and a `deploy` job builds with
 OpenNext and ships via [`cloudflare/wrangler-action`](https://github.com/cloudflare/wrangler-action)
-on push to `main` — but only once `CLOUDFLARE_API_TOKEN` (and
-`CLOUDFLARE_ACCOUNT_ID`) secrets are set; without the token the deploy step is
-skipped. The deploy target is a `*.workers.dev` URL; a `planeo.tre.systems`
-custom domain is an optional one-line `routes`/`custom_domain` add in
-`wrangler.jsonc`, not yet configured.
+on push to `main`, using the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
+secrets (the deploy step skips cleanly if the token is absent). A
+`planeo.tre.systems` custom domain is an optional one-line
+`routes`/`custom_domain` add in `wrangler.jsonc`, not yet configured.

@@ -6,9 +6,9 @@ verification commands, architecture rules, and the code map in this repo.
 Key reflexes for Planeo:
 
 - Work on `main` and push there. A push to `main` runs CI and auto-deploys to
-  **Cloudflare Workers** once `CLOUDFLARE_API_TOKEN` is set (the app is not
-  currently deployed). After a code change confirm CI is green and, once
-  deployed, smoke-test the live app. Docs-only changes just need commit + push.
+  **Cloudflare Workers**, live at <https://planeo.rob-gilks.workers.dev>. After a
+  code change confirm CI is green and smoke-test the live app. Docs-only changes
+  just need commit + push.
 - The gate before pushing is `npm run verify` (prettier, lint, `tsc --noEmit`);
   `npm run check` adds the Playwright e2e suite. `npm run preview` exercises the
   full Workers runtime including the `EventHub` Durable Object.

@@ -11,10 +11,10 @@ their own viewpoint, send that view to Gemini, and decide how to move and what
 to say. User positions, AI chat, and the physics cubes are synchronized between
 browsers over Server-Sent Events. It is a Next.js app that runs on **Cloudflare
 Workers** via the `@opennextjs/cloudflare` adapter, with a single `EventHub`
-Durable Object as the real-time authority. It is **not currently deployed**, and
-CI deploys it on push to `main` once a `CLOUDFLARE_API_TOKEN` secret is set (see
-Workflow). The deploy target is a `*.workers.dev` URL; the `planeo.tre.systems`
-custom domain is an optional one-line `wrangler.jsonc` add, not yet configured.
+Durable Object as the real-time authority. It is live at
+<https://planeo.rob-gilks.workers.dev>, and CI redeploys it on every push to
+`main`. A `planeo.tre.systems` custom domain is an optional one-line
+`wrangler.jsonc` add, not yet configured.
 
 Read before substantial work:
 
@@ -35,9 +35,9 @@ Read before substantial work:
 - A push to `main` triggers CI, which **auto-deploys to Cloudflare Workers**
   once `CLOUDFLARE_API_TOKEN` (and `CLOUDFLARE_ACCOUNT_ID`) secrets are set on
   the repo. Treat a push to `main` as a potential production deploy.
-- After a code change: confirm CI is green. Once the app is deployed, smoke-test
-  the `*.workers.dev` URL in a browser (click to start, watch agents move and
-  chat). Docs-only changes just need commit + push.
+- After a code change: confirm CI is green, then smoke-test
+  <https://planeo.rob-gilks.workers.dev> in a browser (click to start, watch
+  agents move and chat). Docs-only changes just need commit + push.
 
 ## Verification
 

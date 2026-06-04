@@ -20,10 +20,11 @@ export const useEventSource = (myId: string) => {
   const handleBoxEventFromStore = useBoxStore((s) => s.handleBoxEvent);
 
   useEffect(() => {
-    // connect() is idempotent; close the connection on unmount.
-    connectToEventSource();
+    // connect() is idempotent; close the connection on unmount. The id lets the
+    // DO identify this client for host election.
+    connectToEventSource(myId);
     return () => disconnectFromEventSource();
-  }, [connectToEventSource, disconnectFromEventSource]);
+  }, [connectToEventSource, disconnectFromEventSource, myId]);
 
   useEffect(() => {
     const handleChatMessageEvent = (event: ChatMessageEventType) => {

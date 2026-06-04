@@ -215,7 +215,7 @@ const Scene = ({ myId, myName }: { myId: string; myName?: string }) => {
             myId={myId}
             {...(myName !== undefined && { myName })}
           />
-          <ServerDrivenBoxes />
+          <ServerDrivenBoxes myId={myId} />
         </Physics>
       </Canvas>
     </>

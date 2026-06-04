@@ -19,11 +19,20 @@ export const ChatMessageEventSchema = MessageSchema.extend({
 });
 export type ChatMessageEventType = z.infer<typeof ChatMessageEventSchema>;
 
+// Server → client: designates the current simulation host (the one client that
+// drives the AI agents and box physics).
+export const HostEventSchema = z.object({
+  type: z.literal("host"),
+  hostId: z.string(),
+});
+export type HostEventType = z.infer<typeof HostEventSchema>;
+
 export const EventSchema = z.discriminatedUnion("type", [
   EyeUpdateSchema,
   ChatMessageEventSchema,
   BoxEventSchema,
   BoxUpdatePayloadSchema,
+  HostEventSchema,
 ]);
 export type EventType = z.infer<typeof EventSchema>;
 

@@ -27,24 +27,34 @@ There is no Redis, database, or pub/sub, and none is needed — the Durable Obje
 one instance. To run multiple independent worlds you would shard by DO name
 (one `idFromName(world)` per world); each is its own isolated authority.
 
+The DO owns the shared _state_, but the _simulation_ that produces it — the AI
+agents' decisions and the cubes' physics — runs on exactly one client at a time,
+the **host**. The DO elects the oldest connected client as host (each client
+supplies a stable `id` on its SSE connection), broadcasts a `host` event whenever
+that changes, and re-elects on disconnect. Only the host drives the agent loop
+and simulates the cubes, posting the results back like any other client;
+everyone else is a pure viewer. This keeps the expensive, write-heavy work
+single-owner instead of every browser redundantly driving — and fighting over —
+the same agents and boxes.
+
 ## Codebase map
 
-| Path                           | Responsibility                                                                                                                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/app/layout.tsx`           | Root layout: fonts, metadata, PWA manifest. No providers.                                                                                                                      |
-| `src/app/page.tsx`             | `HomePage` client component. Mints a per-client `myId` (`nanoid(6)`), mounts the scene + chat UI, starts the text-chat and eye-sync hooks.                                     |
-| `src/app/components/Scene.tsx` | React Three Fiber host: opens the SSE connection, gates on the start overlay, owns the human camera and keyboard controls, renders the world.                                  |
-| `src/app/components/`          | Scene-level R3F components: `Eye`/`Eyes` (agents + users), `Box` (physics cubes), `AIAgentViews` (HUD thumbnails), `StartOverlay`.                                             |
-| `src/components/`              | DOM chat UI: `ChatWindow`, `ChatMessage`, `ChatInput`.                                                                                                                         |
-| `src/hooks/`                   | `useEventSource` (SSE in), `useEyePositionReporting` (position out), `useEyesDataSynchronizer`, `useAIAgentController` (agent vision + decisions), `useAiChat` (text replies). |
-| `src/app/actions/`             | Server actions: `generateMessage.ts` (AI vision/action/chat), `aiControllerActions.ts` (`requestAiDecision` wrapper), `tts.ts` (Google Cloud TTS via REST).                    |
-| `src/server/eventHub.ts`       | The `EventHub` Durable Object: the single real-time authority (eyes, boxes, open SSE connections) and the SSE endpoint handler.                                                |
-| `worker.ts`                    | Custom Worker entry: re-exports `EventHub`, routes `/api/events` to the DO, delegates everything else to the Next.js app.                                                      |
-| `src/lib/`                     | `googleAI.ts` (Gemini client + model selection), `googleAuth.ts` (Web Crypto OAuth), `log.ts` (structured logger), `retry.ts`, `exposeStore.ts`.                               |
-| `src/stores/`                  | Zustand stores (see below).                                                                                                                                                    |
-| `src/domain/`                  | Zod schemas and shared constants (the data contracts).                                                                                                                         |
-| `wrangler.jsonc`               | Worker config: `main = worker.ts`, the `EVENT_HUB` Durable Object binding + migration, non-secret `vars`.                                                                      |
-| `open-next.config.ts`          | `@opennextjs/cloudflare` adapter config (default in-memory cache).                                                                                                             |
+| Path                           | Responsibility                                                                                                                                                                            |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/layout.tsx`           | Root layout: fonts, metadata, PWA manifest. No providers.                                                                                                                                 |
+| `src/app/page.tsx`             | `HomePage` client component. Mints a per-client `myId` (`nanoid(6)`), mounts the scene + chat UI, starts the text-chat and eye-sync hooks.                                                |
+| `src/app/components/Scene.tsx` | React Three Fiber host: opens the SSE connection, gates on the start overlay, owns the human camera and keyboard controls, renders the world.                                             |
+| `src/app/components/`          | Scene-level R3F components: `Eye`/`Eyes` (agents + users), `Box` (physics cubes), `AIAgentViews` (HUD thumbnails), `StartOverlay`.                                                        |
+| `src/components/`              | DOM chat UI: `ChatWindow`, `ChatMessage`, `ChatInput`.                                                                                                                                    |
+| `src/hooks/`                   | `useEventSource` (SSE in), `useEyePositionReporting` (position out), `useEyesDataSynchronizer`, `useAIAgentController` (agent vision + decisions; host only), `useAiChat` (text replies). |
+| `src/app/actions/`             | Server actions: `generateMessage.ts` (AI vision/action/chat), `aiControllerActions.ts` (`requestAiDecision` wrapper), `tts.ts` (Google Cloud TTS via REST).                               |
+| `src/server/eventHub.ts`       | The `EventHub` Durable Object: the single real-time authority (eyes, boxes, open SSE connections) and the SSE endpoint handler.                                                           |
+| `worker.ts`                    | Custom Worker entry: re-exports `EventHub`, routes `/api/events` to the DO, delegates everything else to the Next.js app.                                                                 |
+| `src/lib/`                     | `googleAI.ts` (Gemini client + model selection), `googleAuth.ts` (Web Crypto OAuth), `log.ts` (structured logger), `retry.ts`, `exposeStore.ts`.                                          |
+| `src/stores/`                  | Zustand stores (see below).                                                                                                                                                               |
+| `src/domain/`                  | Zod schemas and shared constants (the data contracts).                                                                                                                                    |
+| `wrangler.jsonc`               | Worker config: `main = worker.ts`, the `EVENT_HUB` Durable Object binding + migration, non-secret `vars`.                                                                                 |
+| `open-next.config.ts`          | `@opennextjs/cloudflare` adapter config (default in-memory cache).                                                                                                                        |
 
 ## Patterns
 
@@ -76,6 +86,9 @@ are tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md#pattern-consistency--gaps).
 
 - **One Durable Object is the authority.** A single `idFromName("global")`
   instance owns all shared state; clients never hold authority.
+- **Single simulation host.** The DO elects the oldest connected client as the
+  one that runs the AI-agent loop and the cube physics, broadcasting a `host`
+  event on change; every other client renders the broadcast results as a viewer.
 - **Custom Worker entry: route-one, delegate-rest.** `worker.ts` forwards
   `/api/events` to the DO and hands everything else to the Next.js app.
 - **Broadcast / subscribe with state replay.** A new SSE subscriber is registered,
@@ -95,8 +108,9 @@ are tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md#pattern-consistency--gaps).
   gRPC `@google-cloud/*` SDKs (which don't run on Workers).
 - **Best-effort broadcast.** Broadcast and stream-write failures are caught and
   dropped, never thrown, so one dead client can't break the loop.
-- **Deliberate server-side pacing.** A fixed `setTimeout(5000)` in the vision
-  action is the agent-loop rate limiter.
+- **The host paces the agent loop.** The ~5 s cadence between agent decisions is
+  a client-side interval in the host's `useFrame`, not a server-side sleep — the
+  vision action returns as soon as Gemini does.
 - **Wrangler-bundled code imports relatively.** The DO is bundled by Wrangler, not
   Next, so it imports domain schemas from specific files via relative paths —
   never `@/…` or any module that reads `process.env` at load.
@@ -156,23 +170,27 @@ it routes `/api/events` straight to the one DO stub (`idFromName("global")`) and
 delegates every other request to the Next.js app. The DO's `fetch` handles two
 methods:
 
-- **`GET /api/events`** opens an SSE stream (`text/event-stream`). On connect it
-  initializes the boxes once, seeds the configured AI agents' eye positions
-  (`agents.slice(0, TOTAL_AGENTS)`, spread along X), registers the writer as a
-  subscriber, and replays the current eyes and boxes to the new client.
+- **`GET /api/events?id=<clientId>`** opens an SSE stream (`text/event-stream`).
+  On connect it initializes the boxes once, seeds the configured AI agents' eye
+  positions (`agents.slice(0, TOTAL_AGENTS)`, spread along X), registers the
+  writer as a subscriber keyed by `clientId`, (re-)elects the host, and replays
+  the current eyes, boxes, and current host to the new client.
 - **`POST /api/events`** validates the body against `EventSchema` and dispatches:
   `eyeUpdate → setEye`, `chatMessage → broadcast`, `boxUpdate → setBox`.
 
 Inside the DO, `eyes`, `boxes`, and `subs` are in-memory collections; `broadcast`
 writes `data:<json>\n\n` to every live subscriber; `setBox` preserves a box's
 color across updates; a recurring DO `alarm` (every 10 s) runs `purgeStale`,
-which drops eyes idle for more than 30 s. Boxes are created once from
+which drops eyes idle for more than 30 s. The oldest subscriber is the elected
+`host`; adding or dropping a subscriber re-elects, and on a change the DO
+broadcasts a `host` event. Boxes are created once from
 `NUMBER_OF_BOXES` at positions `[i*15 - (N-1)*7.5, 5, -20]` with colors cycled
 from a 12-entry palette.
 
-On the client, `useEventSource` opens `EventSource("/api/events")`, `safeParse`s
-each message, and fans out: `eyeUpdate → rawEyeEventStore`, `chatMessage`/`box`
-to registered listeners. `useEyePositionReporting` polls the camera every 100 ms
+On the client, `useEventSource` opens `EventSource("/api/events?id=<myId>")`,
+`safeParse`s each message, and fans out: `eyeUpdate → rawEyeEventStore`,
+`chatMessage`/`box` to registered listeners, and `host → eventStore.hostId`
+(which gates the agent loop and the cube physics). `useEyePositionReporting` polls the camera every 100 ms
 and sends an `eyeUpdate` (via `navigator.sendBeacon`) when the rounded
 position/look changed, or at least every 20 s. `useEyesDataSynchronizer` maps
 raw eye records into the animated `eyesStore` for rendering.
@@ -185,6 +203,17 @@ raw eye records into the animated `eyesStore` for rendering.
 | `chatMessage` | both            | a `Message` (`id`, `userId`, `name?`, `text`, `timestamp`) |
 | `box`         | server → client | `id`, `p`, `o` (orientation), `c` (color), `t`             |
 | `boxUpdate`   | client → server | `id`, `p?`, `o?` (drives `setBox`)                         |
+| `host`        | server → client | `hostId` (the elected simulation host's client id)         |
+
+### Physics cubes
+
+The cubes are simulated by Rapier on the **host** only: there each box is a
+`dynamic` rigid body, and [`Box.tsx`](src/app/components/Box.tsx) transmits its
+pose (change-detected, rounded) as `boxUpdate` events. On every other client the
+same boxes are `kinematicPosition` bodies that follow the `box` events the host
+produces (lerped toward the target by `boxStore.updateBoxAnimations`). The
+`RigidBody` is keyed on the host/viewer role, so it cleanly remounts with the
+right body type when the host changes.
 
 ## AI agents
 
@@ -201,28 +230,30 @@ Two Gemini models back them, both via the `@google/genai` client keyed by
 ### Vision + movement loop
 
 [`useAIAgentController`](src/hooks/useAIAgentController.ts) runs inside the
-Canvas. For each agent (other than the local user) it allocates an offscreen
-`PerspectiveCamera` and a `320×200` `WebGLRenderTarget`. A single `useFrame`
-drives two cadences:
+Canvas, but its frame loop only does work on the elected **host** (the `hostId`
+from `eventStore` equals this client's id); on every other client it
+early-returns, so each agent is driven exactly once. For each agent (other than
+the local user) it allocates an offscreen `PerspectiveCamera` and a `320×200`
+`WebGLRenderTarget`. On the host a single `useFrame` drives two cadences:
 
 - **Visual update** every `100 ms` (~10 FPS): render the scene from the agent's
   eye, read + vertically flip the pixels into a PNG data URL, and push it to
   `aiVisionStore` for the HUD thumbnail.
-- **Decision** every `500 ms`, guarded by a per-agent in-flight lock: send the
-  latest thumbnail and the last 10 chat messages to the `requestAiDecision`
-  server action, then apply the returned action locally — `move` translates
-  along the forward vector by `distance × 10`; `turn` rotates the look-at about
-  Y by `degrees`. The new position is reported back over SSE.
+- **Decision** every `~5 s` (the agent-loop rate limiter), guarded by a per-agent
+  in-flight lock: send the latest thumbnail and the last 10 chat messages to the
+  `requestAiDecision` server action, then apply the returned action locally —
+  `move` translates along the forward vector by `distance × 10`; `turn` rotates
+  the look-at about Y by `degrees`. The new position is reported back over SSE.
 
 [`generateAiActionAndChat`](src/app/actions/generateMessage.ts) is the server
 side: it builds the agent's "newly-awakened, disoriented" persona prompt, calls
 Gemini with `responseMimeType: "application/json"` (`temperature 0.4`,
 `maxOutputTokens 150`), strips code fences, and validates the result against
-`AIResponseSchema` (`{ chatMessage?, action }`). If there's a chat
-message it broadcasts it to the `EventHub` DO via the `EVENT_HUB` binding
-(`getCloudflareContext().env`). It then **awaits a fixed `setTimeout(5000)`
-before returning** — this server-side pause, not any client constant, is what
-effectively paces each agent to roughly one action every ~5 s.
+`AIResponseSchema` (`{ chatMessage?, action }`). If there's a chat message it
+broadcasts it to the `EventHub` DO via the `EVENT_HUB` binding
+(`getCloudflareContext().env`) and returns the action. Pacing is the host's job:
+the `~5 s` cadence lives in `useAIAgentController`'s frame loop, so the action
+returns as soon as Gemini does.
 
 ### Text chat replies
 

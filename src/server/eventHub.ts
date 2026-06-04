@@ -48,7 +48,10 @@ const BOX_COLORS = [
   "#FF7F00",
 ];
 
-type Subscriber = { writer: WritableStreamDefaultWriter<Uint8Array> };
+type Subscriber = {
+  writer: WritableStreamDefaultWriter<Uint8Array>;
+  clientId: string;
+};
 
 export class EventHub extends DurableObject<Env> {
   private readonly eyes = new Map<string, EyeUpdateType>();
@@ -57,6 +60,10 @@ export class EventHub extends DurableObject<Env> {
 
   private boxesInitialized = false;
   private agentsInitialized = false;
+
+  // The oldest connected client is the simulation host (drives the AI agents
+  // and the box physics); re-elected when it disconnects.
+  private host: string | undefined;
 
   private readonly numberOfBoxes: number;
   private readonly totalAgents: number;
@@ -95,18 +102,27 @@ export class EventHub extends DurableObject<Env> {
     this.seedAgents();
     this.purgeStale();
 
+    const clientId =
+      new URL(request.url).searchParams.get("id") ?? crypto.randomUUID();
     const { readable, writable } = new TransformStream<
       Uint8Array,
       Uint8Array
     >();
-    const subscriber: Subscriber = { writer: writable.getWriter() };
+    const subscriber: Subscriber = { writer: writable.getWriter(), clientId };
     this.subs.add(subscriber);
-    log.debug("hub", "subscriber added", { subscribers: this.subs.size });
+    this.electHost();
+    log.debug("hub", "subscriber added", {
+      subscribers: this.subs.size,
+      host: this.host,
+    });
     await this.scheduleAlarm();
 
-    // Replay current world state to the new subscriber.
+    // Replay current world state + the current host to the new subscriber.
     for (const eye of this.eyes.values()) this.writeTo(subscriber, eye);
     for (const box of this.boxes.values()) this.writeTo(subscriber, box);
+    if (this.host) {
+      this.writeTo(subscriber, { type: "host", hostId: this.host });
+    }
 
     request.signal.addEventListener("abort", () => this.drop(subscriber));
 
@@ -129,10 +145,20 @@ export class EventHub extends DurableObject<Env> {
     if (!this.subs.delete(subscriber)) return;
     subscriber.writer.close().catch(() => {});
     log.debug("hub", "subscriber dropped", { subscribers: this.subs.size });
+    this.electHost();
   }
 
   private broadcast(msg: unknown): void {
     for (const subscriber of this.subs) this.writeTo(subscriber, msg);
+  }
+
+  // Elect the oldest connected client as host; broadcast only on change.
+  private electHost(): void {
+    const newHost = this.subs.values().next().value?.clientId;
+    if (newHost !== this.host) {
+      this.host = newHost;
+      if (this.host) this.broadcast({ type: "host", hostId: this.host });
+    }
   }
 
   // --- POST: ingest client/AI events ---------------------------------------

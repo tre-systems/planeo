@@ -15,13 +15,17 @@ import { EYE_Y_POSITION } from "@/domain/sceneConstants";
 import { roundArray } from "@/lib/utils";
 import { useAIVisionStore } from "@/stores/aiVisionStore";
 import { useCommunicationStore } from "@/stores/communicationStore";
+import { useEventStore } from "@/stores/eventStore";
 import { useEyesStore } from "@/stores/eyesStore";
 
 import type { EyeUpdateType, Vec3 as DomainVec3 } from "@/domain";
 import type { AIAction } from "@/domain/aiAction";
 
 const VISUAL_UPDATE_INTERVAL_MS = 100; // For smoother view updates (~10 FPS)
-const DECISION_MAKING_INTERVAL_MS = 500; // How often each AI thinks (LLM call)
+// How often each AI thinks (LLM call). This is the agent loop's pacing — only
+// the host runs the loop, so it lives here client-side rather than as a
+// server-side sleep in the Gemini action.
+const DECISION_MAKING_INTERVAL_MS = 5000;
 const CAPTURE_WIDTH = 320;
 const CAPTURE_HEIGHT = 200;
 const MOVEMENT_DISTANCE_MULTIPLIER = 10; // New multiplier
@@ -29,6 +33,10 @@ const MOVEMENT_DISTANCE_MULTIPLIER = 10; // New multiplier
 export const useAIAgentController = (myId: string) => {
   const { gl, scene: mainScene } = useThree();
   const agents = getAIAgents();
+  // Only the elected host drives the AI agents (renders their views, requests
+  // decisions, and broadcasts movement). Everyone else just watches the agents
+  // move via the eyeUpdate events the host posts to the DO.
+  const isHost = useEventStore((s) => s.hostId) === myId;
   const getMessages = useCommunicationStore((s) => s.messages);
   const managedEyes = useEyesStore((s) => s.managedEyes);
   const updateAIAgentTarget = useEyesStore((s) => s.updateAIAgentTarget);
@@ -283,7 +291,7 @@ export const useAIAgentController = (myId: string) => {
   );
 
   useFrame(() => {
-    if (agents.length === 0) return;
+    if (!isHost || agents.length === 0) return;
     const now = Date.now();
 
     for (const agent of agents) {

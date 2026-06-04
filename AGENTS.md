@@ -21,8 +21,7 @@ Read before substantial work:
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — system overview, codebase map, the SSE
   wire protocol, the AI loop, and the constants that matter.
 - [`docs/BACKLOG.md`](docs/BACKLOG.md) — known limitations and intentional gaps.
-  Read it before "fixing" something that is already a tracked, deliberate quirk
-  (the vestigial audio stub, the dead `aiVision` event, unused deps).
+  Read it before "fixing" something that is already a tracked, deliberate quirk.
 - [`docs/`](docs/) — per-feature detail (AI agents, vision, SSE, chat, physics,
   TTS, camera, cube art).
 
@@ -87,13 +86,15 @@ Read before substantial work:
   wire format (`event.ts`) and the JSON the vision model must return
   (`aiAction.ts` → `AIResponseSchema`). A change there ripples to the `EventHub`
   DO, every client, and the LLM prompt at once — keep them in sync.
-- **Keep agent decisions cheap and paced.** Each decision is a Gemini vision
-  call followed by a deliberate `setTimeout(5000)` server-side pause in
-  `generateMessage.ts`. That pause is the rate limiter; removing it will hammer
-  the API and the chat.
-- The `aiVision` SSE event has no server handler and the server-side
-  `generateAudio` stub's `audioSrc` is never read by the client. Don't build on
-  either without reading the backlog — they're vestigial, not load-bearing.
+- **One client is the simulation host.** The DO elects the oldest connected
+  client as `host` (broadcast as a `host` event); only that client drives the AI
+  agents and simulates the cubes, while everyone else renders the broadcast
+  results. `useAIAgentController` and `Box.tsx` gate on `eventStore.hostId === myId`.
+- **Keep agent decisions cheap and paced.** The host paces each agent to roughly
+  one decision every 5 s via the interval in `useAIAgentController`'s frame loop
+  (`DECISION_MAKING_INTERVAL_MS`) plus a per-agent in-flight lock. The server
+  action does no pacing of its own — removing the client interval will hammer the
+  API and the chat.
 
 ## Tests
 

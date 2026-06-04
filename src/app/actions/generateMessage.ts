@@ -254,9 +254,6 @@ Your response:`;
       await postChatMessageToEvents(aiChatMessage);
     }
 
-    // Server-side pacing — the dominant rate limiter for the agent loop.
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-
     return validatedResponse.data;
   } catch (error) {
     log.error("ai.action", "Error generating AI response", {

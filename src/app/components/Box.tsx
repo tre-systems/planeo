@@ -31,9 +31,10 @@ const artImageUrls = [
 
 interface SyncedRigidBoxProps {
   box: AnimatedBoxState;
+  isHost: boolean;
 }
 
-const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box }) => {
+const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box, isHost }) => {
   const rigidBodyRef = useRef<RapierRigidBody>(null);
   const lastTransmittedPRef = useRef<Vec3 | undefined>(undefined);
   const lastTransmittedORef = useRef<Vec3 | undefined>(undefined);
@@ -144,8 +145,21 @@ const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box }) => {
   );
 
   useFrame(() => {
-    if (rigidBodyRef.current && rigidBodyRef.current.isDynamic()) {
-      handleUpdate(rigidBodyRef.current);
+    const rb = rigidBodyRef.current;
+    if (!rb) return;
+    if (isHost) {
+      // Host owns the physics sim; read the simulated pose and broadcast it.
+      if (rb.isDynamic()) handleUpdate(rb);
+    } else {
+      // Viewer: the body is kinematic — follow the pose the host broadcast
+      // (interpolated toward the target by updateBoxAnimations each frame).
+      rb.setNextKinematicTranslation({
+        x: box.currentP.x,
+        y: box.currentP.y,
+        z: box.currentP.z,
+      });
+      const q = new THREE.Quaternion().setFromEuler(box.currentO);
+      rb.setNextKinematicRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
     }
   });
 
@@ -174,11 +188,10 @@ const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box }) => {
   return (
     <RigidBody
       ref={rigidBodyRef}
-      key={box.id}
       position={box.currentP}
       rotation={box.currentO}
       colliders="cuboid"
-      type="dynamic"
+      type={isHost ? "dynamic" : "kinematicPosition"}
     >
       <Box args={[15, 15, 15]}>
         {texture ? (
@@ -191,11 +204,13 @@ const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box }) => {
   );
 };
 
-export const ServerDrivenBoxes = () => {
+export const ServerDrivenBoxes = ({ myId }: { myId: string }) => {
   const boxesMap = useBoxStore(
     (state: { boxes: Map<string, AnimatedBoxState> }) => state.boxes,
   );
   const updateBoxAnimations = useBoxStore((state) => state.updateBoxAnimations);
+  // Only the host simulates box physics; everyone else renders them kinematically.
+  const isHost = useEventStore((s) => s.hostId) === myId;
 
   const serverBoxesArray: AnimatedBoxState[] = Array.from(boxesMap.values());
 
@@ -206,7 +221,15 @@ export const ServerDrivenBoxes = () => {
   return (
     <>
       {serverBoxesArray.map((boxState: AnimatedBoxState) => {
-        return <SyncedRigidBox key={boxState.id} box={boxState} />;
+        // Key on the role so the RigidBody remounts (dynamic ↔ kinematic) when
+        // the host changes.
+        return (
+          <SyncedRigidBox
+            key={`${boxState.id}-${isHost ? "host" : "viewer"}`}
+            box={boxState}
+            isHost={isHost}
+          />
+        );
       })}
       <RigidBody type="fixed" colliders="cuboid">
         <CuboidCollider

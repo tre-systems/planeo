@@ -27,6 +27,7 @@ type BoxEventListener = (event: BoxEventType) => void;
 interface EventStoreState {
   isConnected: boolean;
   lastError: string | null;
+  hostId: string | null;
   eventSourceInstance: EventSource | null;
   listeners: {
     eyeUpdate: EyeUpdateEventListener[];
@@ -39,7 +40,7 @@ interface EventStoreState {
 }
 
 interface EventStoreActions {
-  connect: () => void;
+  connect: (myId: string) => void;
   disconnect: () => void;
   subscribeEyeUpdates: (callback: EyeUpdateEventListener) => () => void;
   subscribeChatMessageEvents: (
@@ -56,6 +57,7 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
   immer((set, get) => ({
     isConnected: false,
     lastError: null,
+    hostId: null,
     eventSourceInstance: null,
     listeners: {
       eyeUpdate: [],
@@ -110,19 +112,12 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
       300,
     ),
 
-    connect: () => {
-      if (get().eventSourceInstance || get().isConnected) {
-        console.log(
-          "EventSource connection attempt skipped: already connected or connecting.",
-        );
-        return;
-      }
-      console.log("Attempting to connect to EventSource...");
-      const es = new EventSource("/api/events");
+    connect: (myId: string) => {
+      if (get().eventSourceInstance || get().isConnected) return;
+      const es = new EventSource(`/api/events?id=${encodeURIComponent(myId)}`);
       set({ eventSourceInstance: es, isConnected: false, lastError: null });
 
       es.onopen = () => {
-        console.log("EventSource connected.");
         set({ isConnected: true, lastError: null });
       };
       es.onmessage = (event: MessageEvent) => get()._handleMessage(event);
@@ -282,6 +277,8 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
           );
         } else if (data.type === "box") {
           [...get().listeners.box].forEach((callback) => callback(data));
+        } else if (data.type === "host") {
+          set({ hostId: data.hostId });
         }
       } catch (error) {
         log.error("sse", "Error processing SSE message", {

@@ -13,6 +13,17 @@ to look before "fixing" something that is already a tracked, intentional quirk.
   ephemeral — it lives only while the DO is active and is not persisted. To
   support multiple independent worlds, shard by DO name (one instance per world)
   rather than introducing a separate backing store.
+- **One simulation host, best-effort handoff.** The DO elects the oldest
+  connected client as the host that drives the AI agents and the cube physics
+  (broadcast as a `host` event). If the host disconnects the next-oldest takes
+  over from the last broadcast state — but there's a sub-second gap with no host
+  (the sim briefly freezes), and in-flight physics velocities aren't migrated, so
+  boxes resume from their last broadcast pose at rest. Acceptable here; a true
+  handoff would snapshot velocities into the `host` event.
+- **Agent POV thumbnails are host-only.** Only the host renders each agent's
+  offscreen view, so the `AIAgentViews` HUD thumbnails stay blank on viewer
+  clients (the agents still move and chat for everyone). Rendering them on every
+  client is exactly the redundant per-frame work the host model removes.
 - **Only the first agent replies to text chat.** `useAiChat` always routes
   human chat to `agents[0]`; other agents never answer typed messages (they
   still act and speak via the vision loop).

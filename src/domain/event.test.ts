@@ -33,6 +33,9 @@ describe("EventSchema", () => {
       EventSchema.safeParse({ type: "boxUpdate", id: "b1", p: [0, 0, 0] })
         .success,
     ).toBe(true);
+    expect(
+      EventSchema.safeParse({ type: "host", hostId: "client-1" }).success,
+    ).toBe(true);
   });
 
   it("rejects unknown types (incl. the removed aiVision) and bad shapes", () => {
@@ -49,6 +52,8 @@ describe("EventSchema", () => {
       EventSchema.safeParse({ type: "eyeUpdate", id: "u", p: [1, 2], t })
         .success,
     ).toBe(false);
+    // host without a hostId
+    expect(EventSchema.safeParse({ type: "host" }).success).toBe(false);
   });
 });
 

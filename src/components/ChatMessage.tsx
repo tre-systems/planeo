@@ -47,11 +47,6 @@ export const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
 
         if (result.error) {
           console.error("[ChatMessage TTS] Error from action:", result.error);
-        } else if (result.rateLimitError) {
-          console.warn(
-            "[ChatMessage TTS] Rate limit error:",
-            result.rateLimitError.message,
-          );
         } else if (result.audioBase64) {
           if (audioRef.current) {
             audioRef.current.pause();

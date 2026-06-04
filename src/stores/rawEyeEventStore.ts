@@ -3,6 +3,7 @@ import { immer } from "zustand/middleware/immer";
 
 import { type Vec3 } from "@/domain";
 import { EyeUpdateType } from "@/domain/event";
+import { exposeStoreForDebug } from "@/lib/exposeStore";
 
 export interface RawEyeEventState {
   eyes: Record<string, { p?: Vec3; l?: Vec3; t: number }>;
@@ -11,13 +12,6 @@ export interface RawEyeEventState {
 interface RawEyeEventActions {
   setEye: (eyeUpdate: EyeUpdateType) => void;
   removeStaleEyes: (thresholdMs: number) => void;
-}
-
-// Augment the Window interface for the debug store
-declare global {
-  interface Window {
-    __rawEyeEventStore?: typeof useRawEyeEventStore;
-  }
 }
 
 export const useRawEyeEventStore = create<
@@ -52,10 +46,4 @@ export const useRawEyeEventStore = create<
   })),
 );
 
-if (
-  typeof window !== "undefined" &&
-  (process.env.NODE_ENV !== "production" ||
-    process.env["NEXT_PUBLIC_E2E"] === "true")
-) {
-  window.__rawEyeEventStore = useRawEyeEventStore;
-}
+exposeStoreForDebug("__rawEyeEventStore", useRawEyeEventStore);

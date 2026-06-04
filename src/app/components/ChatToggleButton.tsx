@@ -1,9 +1,16 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
+
 import { useCommunicationStore } from "@/stores/communicationStore";
 
 export const ChatToggleButton = () => {
-  const { isChatVisible, toggleChatVisibility } = useCommunicationStore();
+  const { isChatVisible, toggleChatVisibility } = useCommunicationStore(
+    useShallow((s) => ({
+      isChatVisible: s.isChatVisible,
+      toggleChatVisibility: s.toggleChatVisibility,
+    })),
+  );
 
   return (
     <button

@@ -8,34 +8,26 @@ import { useEventStore } from "@/stores/eventStore";
 
 import type { ChatMessageEventType } from "@/domain/event";
 
-export const useEventSource = (myId: React.RefObject<string>) => {
+export const useEventSource = (myId: string) => {
   const connectToEventSource = useEventStore((s) => s.connect);
+  const disconnectFromEventSource = useEventStore((s) => s.disconnect);
   const subscribeToChatMessageEvents = useEventStore(
     (s) => s.subscribeChatMessageEvents,
   );
   const subscribeToBoxEvents = useEventStore((s) => s.subscribeBoxEvents);
-  const eventSourceConnected = useEventStore((s) => s.isConnected);
 
   const addMessage = useCommunicationStore((s) => s.addMessage);
   const handleBoxEventFromStore = useBoxStore((s) => s.handleBoxEvent);
 
   useEffect(() => {
-    // Attempt to connect to the EventSource when the hook mounts
-    // if not already connected.
-    if (!eventSourceConnected) {
-      connectToEventSource();
-    }
-  }, [connectToEventSource, eventSourceConnected]);
+    // connect() is idempotent; close the connection on unmount.
+    connectToEventSource();
+    return () => disconnectFromEventSource();
+  }, [connectToEventSource, disconnectFromEventSource]);
 
   useEffect(() => {
     const handleChatMessageEvent = (event: ChatMessageEventType) => {
-      console.log("[EventSource Hook] Received chat message event:", event);
-      console.log("[EventSource Hook] Current myId:", myId.current);
-      if (event.userId === myId.current) {
-        console.log("[EventSource Hook] Ignoring own message.");
-        return;
-      }
-      console.log("[EventSource Hook] Adding message to store:", event);
+      if (event.userId === myId) return; // ignore our own echoed messages
       addMessage(event);
     };
 

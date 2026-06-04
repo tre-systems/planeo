@@ -19,19 +19,9 @@ export const ChatMessageEventSchema = MessageSchema.extend({
 });
 export type ChatMessageEventType = z.infer<typeof ChatMessageEventSchema>;
 
-export const AiVisionEventSchema = z.object({
-  type: z.literal("aiVision"),
-  userId: z.string().min(1),
-  timestamp: z.number(),
-  imageDataUrl: z.string().url().startsWith("data:image/png;base64,"),
-  chatHistory: z.array(MessageSchema),
-});
-export type AiVisionEventType = z.infer<typeof AiVisionEventSchema>;
-
 export const EventSchema = z.discriminatedUnion("type", [
   EyeUpdateSchema,
   ChatMessageEventSchema,
-  AiVisionEventSchema,
   BoxEventSchema,
   BoxUpdatePayloadSchema,
 ]);

@@ -2,14 +2,14 @@ import { ShaderMaterial, Vector3 } from "three";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
+import { EyeUpdateType } from "@/domain/event";
 import {
   EyeState,
   EyeStatus,
   INITIAL_SCALE,
   TARGET_SCALE,
   FADE_DURATION,
-  EyeUpdateType,
-} from "@/domain/eye"; // Assuming path, adjust if necessary
+} from "@/domain/eye";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
 
 const CONVERSATION_DISTANCE_THRESHOLD = 5; // Example threshold, adjust as needed
@@ -50,19 +50,6 @@ export const useEyesStore = create<EyesState & EyesActions>()(
           const existingEye = state.managedEyes[eyeData.id];
 
           if (existingEye) {
-            console.log(
-              `[eyesStore.syncEyes] Found existingEye for ${eyeData.id}`,
-            );
-            if (
-              !existingEye.targetPosition ||
-              !(existingEye.targetPosition instanceof Vector3)
-            ) {
-              console.error(
-                `[eyesStore.syncEyes] ERROR: existingEye.targetPosition is problematic for ${eyeData.id}:`,
-                existingEye.targetPosition,
-              );
-            }
-
             if (eyeData.p) {
               const positionVec = new Vector3(...eyeData.p);
               positionVec.y = EYE_Y_POSITION;

@@ -8,14 +8,18 @@ import { z } from "zod";
 import { AIResponseSchema, type ParsedAIResponse } from "@/domain/aiAction";
 import { isAIAgentId, getAIAgentById } from "@/domain/aiAgent";
 import { Message, MessageSchema } from "@/domain/message";
-import { generateAudio } from "@/lib/audioService";
 import {
   getGoogleAIClient,
   getActiveVisionModel,
   generateTextCompletion,
 } from "@/lib/googleAI";
+import { log } from "@/lib/log";
+import { retry } from "@/lib/retry";
 
 export type ChatHistory = z.infer<typeof MessageSchema>[];
+
+const ChatHistorySchema = z.array(MessageSchema);
+const ImageDataUrlSchema = z.string().startsWith("data:image/png;base64,");
 
 // Broadcast a chat message through the EventHub Durable Object (the single
 // real-time authority). Best-effort: failures are logged, not thrown, so a
@@ -30,7 +34,9 @@ const postChatMessageToEvents = async (message: Message): Promise<void> => {
       body: JSON.stringify({ ...message, type: "chatMessage" as const }),
     });
   } catch (error) {
-    console.error("EventService: Failed to broadcast via EVENT_HUB:", error);
+    log.error("ai.broadcast", "Failed to broadcast via EVENT_HUB", {
+      error: String(error),
+    });
   }
 };
 
@@ -38,10 +44,16 @@ export const generateAiChatMessage = async (
   chatHistory: ChatHistory,
   aiUserId: string,
 ): Promise<Message | undefined> => {
+  const validated = ChatHistorySchema.safeParse(chatHistory);
+  if (!validated.success || !aiUserId) {
+    log.warn("ai.chat", "Invalid input to generateAiChatMessage");
+    return undefined;
+  }
+
   const agent = getAIAgentById(aiUserId);
   const agentName = agent?.displayName || aiUserId;
 
-  const historySlice = chatHistory;
+  const historySlice = validated.data;
   const prompt =
     historySlice
       .map((msg) => {
@@ -68,13 +80,13 @@ export const generateAiChatMessage = async (
       await postChatMessageToEvents(aiMessage);
       return aiMessage;
     }
-    console.log(`AI Chat: ${agentName} did not return a response.`);
+    log.info("ai.chat", "No response", { agent: agentName });
     return undefined;
   } catch (error) {
-    console.error(
-      `AI Chat: Error generating message for ${agentName}:`,
-      error instanceof Error ? error.stack : error,
-    );
+    log.error("ai.chat", "Error generating message", {
+      agent: agentName,
+      error: error instanceof Error ? error.stack : String(error),
+    });
     return undefined;
   }
 };
@@ -86,15 +98,24 @@ export const generateAiActionAndChat = async (
   imageDataUrl: string,
   chatHistory: ChatHistory,
 ): Promise<ParsedAIResponse | undefined> => {
+  if (
+    !aiAgentId ||
+    !ImageDataUrlSchema.safeParse(imageDataUrl).success ||
+    !ChatHistorySchema.safeParse(chatHistory).success
+  ) {
+    log.warn("ai.action", "Invalid input to generateAiActionAndChat");
+    return undefined;
+  }
+
   const agent = getAIAgentById(aiAgentId);
   const agentDisplayName = agent?.displayName || aiAgentId;
-
-  const genAI = await getGoogleAIClient();
   const visionModelConfig = await getActiveVisionModel();
 
   const base64ImageData = imageDataUrl.split(",")[1];
   if (!base64ImageData) {
-    console.error("AI Action/Chat: Invalid image data URL format.");
+    log.warn("ai.action", "Invalid image data URL format", {
+      agent: agentDisplayName,
+    });
     return undefined;
   }
 
@@ -180,44 +201,17 @@ Your response:`;
     safetySettings: [],
   };
 
-  console.log(
-    `AI Action/Chat Prompt for ${agentDisplayName}:`,
-    JSON.stringify(
-      {
-        ...request,
-        contents: [
-          {
-            ...request.contents[0],
-            parts: [
-              {
-                inlineData: {
-                  mimeType: "image/png",
-                  data: "<image_data_omitted>",
-                },
-              },
-              request.contents[0].parts[1],
-            ],
-          },
-        ],
-      },
-      null,
-      2,
-    ),
-  );
+  log.debug("ai.action", "Requesting decision", { agent: agentDisplayName });
 
   try {
-    const result = await genAI.models.generateContent(request);
+    const genAI = await getGoogleAIClient();
+    const result = await retry(() => genAI.models.generateContent(request), {
+      attempts: 2,
+    });
     const aiResponseText = result.text;
 
-    console.log(
-      `AI Action/Chat Raw Response for ${agentDisplayName}:`,
-      aiResponseText,
-    );
-
     if (!aiResponseText || !aiResponseText.trim()) {
-      console.warn(
-        `AI Action/Chat: No response or empty response for ${agentDisplayName}`,
-      );
+      log.warn("ai.action", "Empty response", { agent: agentDisplayName });
       return undefined;
     }
 
@@ -232,60 +226,43 @@ Your response:`;
     try {
       parsedJson = JSON.parse(jsonToParse);
     } catch (jsonParseError) {
-      console.error(
-        `AI Action/Chat: Error parsing JSON for ${agentDisplayName}:`,
-        jsonParseError,
-        "Raw response:",
-        aiResponseText,
-        "Attempted to parse:",
-        jsonToParse,
-      );
+      log.error("ai.action", "Failed to parse model JSON", {
+        agent: agentDisplayName,
+        error: String(jsonParseError),
+        raw: aiResponseText,
+      });
       return undefined;
     }
 
     const validatedResponse = AIResponseSchema.safeParse(parsedJson);
-
-    if (validatedResponse.success) {
-      console.log(
-        `AI Action/Chat: Validated response for ${agentDisplayName}:`,
-        validatedResponse.data,
-      );
-
-      let audioSrcGenerated: string | undefined;
-
-      if (validatedResponse.data.chatMessage) {
-        audioSrcGenerated = await generateAudio(
-          validatedResponse.data.chatMessage,
-        );
-
-        const aiChatMessage: Message = {
-          id: uuidv4(),
-          userId: aiAgentId,
-          name: agentDisplayName,
-          text: validatedResponse.data.chatMessage,
-          timestamp: Date.now(),
-          audioSrc: audioSrcGenerated,
-        };
-        await postChatMessageToEvents(aiChatMessage);
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-
-      return { ...validatedResponse.data, audioSrc: audioSrcGenerated };
-    } else {
-      console.error(
-        `AI Action/Chat: Failed to validate AI JSON for ${agentDisplayName}:`,
-        validatedResponse.error.flatten(),
-        "Parsed JSON was:",
-        parsedJson,
-      );
+    if (!validatedResponse.success) {
+      log.error("ai.action", "Model JSON failed validation", {
+        agent: agentDisplayName,
+        details: validatedResponse.error.flatten(),
+      });
       return undefined;
     }
+
+    if (validatedResponse.data.chatMessage) {
+      const aiChatMessage: Message = {
+        id: uuidv4(),
+        userId: aiAgentId,
+        name: agentDisplayName,
+        text: validatedResponse.data.chatMessage,
+        timestamp: Date.now(),
+      };
+      await postChatMessageToEvents(aiChatMessage);
+    }
+
+    // Server-side pacing — the dominant rate limiter for the agent loop.
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
+    return validatedResponse.data;
   } catch (error) {
-    console.error(
-      `AI Action/Chat: Error generating AI response for ${agentDisplayName}:`,
-      error instanceof Error ? error.stack : error,
-    );
+    log.error("ai.action", "Error generating AI response", {
+      agent: agentDisplayName,
+      error: error instanceof Error ? error.stack : String(error),
+    });
     return undefined;
   }
 };

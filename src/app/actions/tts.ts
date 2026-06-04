@@ -3,6 +3,8 @@
 import { z } from "zod";
 
 import { getGoogleAccessToken } from "@/lib/googleAuth";
+import { log } from "@/lib/log";
+import { retry } from "@/lib/retry";
 
 // Google Cloud Text-to-Speech via the REST API (the gRPC @google-cloud/* client
 // does not run on the Cloudflare Workers runtime). Auth is a service-account
@@ -48,10 +50,6 @@ type SynthesizeSpeechParams = z.infer<typeof SynthesizeSpeechParamsSchema>;
 export interface SynthesizeSpeechResult {
   audioBase64?: string;
   error?: string;
-  rateLimitError?: {
-    message: string;
-    resetTimestamp: number;
-  };
 }
 
 // Deterministically map a userId to a voice so each speaker is consistent.
@@ -72,34 +70,36 @@ const performSynthesis = async (
   languageCode: string,
 ): Promise<{ audioBase64?: string; error?: string }> => {
   try {
-    const token = await getGoogleAccessToken();
-    const res = await fetch(TTS_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+    const audioContent = await retry(
+      async () => {
+        const token = await getGoogleAccessToken();
+        const res = await fetch(TTS_ENDPOINT, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            input: { text },
+            voice: { name: voiceName, languageCode },
+            audioConfig: { audioEncoding: "MP3" },
+          }),
+        });
+        if (!res.ok) {
+          throw new Error(
+            `TTS ${res.status}: ${(await res.text()).slice(0, 200)}`,
+          );
+        }
+        // The REST API returns audioContent already base64-encoded.
+        const data = (await res.json()) as { audioContent?: string };
+        if (!data.audioContent) throw new Error("No audio content");
+        return data.audioContent;
       },
-      body: JSON.stringify({
-        input: { text },
-        voice: { name: voiceName, languageCode },
-        audioConfig: { audioEncoding: "MP3" },
-      }),
-    });
-
-    if (!res.ok) {
-      const detail = await res.text();
-      console.error("[TTS] Google REST error:", res.status, detail);
-      return { error: `TTS synthesis failed: ${res.status}` };
-    }
-
-    // The REST API returns audioContent already base64-encoded.
-    const data = (await res.json()) as { audioContent?: string };
-    if (!data.audioContent) {
-      return { error: "TTS synthesis failed: No audio content." };
-    }
-    return { audioBase64: data.audioContent };
+      { attempts: 2 },
+    );
+    return { audioBase64: audioContent };
   } catch (error) {
-    console.error("[TTS] Synthesis error:", error);
+    log.error("tts", "Synthesis error", { error: String(error) });
     return {
       error: error instanceof Error ? error.message : "TTS synthesis failed.",
     };
@@ -116,10 +116,9 @@ export const synthesizeSpeechAction = async (
 
   const validationResult = SynthesizeSpeechParamsSchema.safeParse(params);
   if (!validationResult.success) {
-    console.error(
-      "[TTS Action] Invalid parameters:",
-      validationResult.error.flatten(),
-    );
+    log.warn("tts", "Invalid parameters", {
+      details: validationResult.error.flatten(),
+    });
     return { error: "Invalid parameters." };
   }
 

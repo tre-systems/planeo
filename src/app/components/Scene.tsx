@@ -8,17 +8,12 @@ import { Vector3 } from "three";
 import { EYE_Y_POSITION, GROUND_Y_POSITION } from "@/domain/sceneConstants";
 import { useEventSource, useEyePositionReporting } from "@/hooks";
 import { useAIAgentController } from "@/hooks/useAIAgentController";
-import { downscaleImage } from "@/lib/utils";
 import { useCommunicationStore } from "@/stores/communicationStore";
 import { useSimulationStore } from "@/stores/simulationStore";
 import { AIAgentViews } from "@components/AIAgentViews";
 import { ServerDrivenBoxes } from "@components/Box";
 import { Eyes } from "@components/Eyes";
 import { StartOverlay } from "@components/StartOverlay";
-
-const DOWNSCALED_WIDTH = 320;
-const DOWNSCALED_HEIGHT = 200;
-const CAPTURE_INTERVAL_MS = 5000;
 
 // Basic keyboard state
 const useKeyboardControls = () => {
@@ -39,13 +34,11 @@ const useKeyboardControls = () => {
 };
 
 const CanvasContent = ({ myId, myName }: { myId: string; myName?: string }) => {
-  const { camera, gl } = useThree();
+  const { camera } = useThree();
   useEyePositionReporting(myId, myName || myId, camera);
   useAIAgentController(myId);
   const keyboard = useKeyboardControls();
   const isChatInputFocused = useCommunicationStore((s) => s.isChatInputFocused);
-  const messages = useCommunicationStore((s) => s.messages);
-  const lastCaptureTimeRef = useRef<number>(0); // Throttle capture
 
   const targetVelocity = useRef(new Vector3());
   const currentVelocity = useRef(new Vector3());
@@ -58,36 +51,6 @@ const CanvasContent = ({ myId, myName }: { myId: string; myName?: string }) => {
   const dampingFactor = 0.9;
   const rotationDampingFactor = 0.85;
   const stopThreshold = 0.005;
-
-  const captureCanvas = async () => {
-    const image = gl.domElement.toDataURL("image/png");
-    try {
-      const downscaledImageDataUrl = await downscaleImage(
-        image,
-        DOWNSCALED_WIDTH,
-        DOWNSCALED_HEIGHT,
-      );
-
-      const visionPayload = {
-        type: "aiVision" as const,
-        userId: myId,
-        timestamp: Date.now(),
-        imageDataUrl: downscaledImageDataUrl,
-        chatHistory: messages, // Get current messages from the store
-      };
-
-      // Send to server
-      fetch("/api/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(visionPayload),
-      }).catch(console.error); // Basic error handling
-
-      console.log("AI Vision event sent with downscaled image.");
-    } catch (error) {
-      console.error("Failed to capture or send canvas image:", error);
-    }
-  };
 
   useEffect(() => {
     camera.position.y = EYE_Y_POSITION;
@@ -179,18 +142,6 @@ const CanvasContent = ({ myId, myName }: { myId: string; myName?: string }) => {
     if (camera.position.y !== EYE_Y_POSITION) {
       camera.position.y = EYE_Y_POSITION;
     }
-
-    const didMoveOrRotate =
-      currentVelocity.current.lengthSq() > 0.0001 ||
-      Math.abs(currentRotationSpeed.current) > 0.0001;
-
-    if (didMoveOrRotate) {
-      const now = Date.now();
-      if (now - lastCaptureTimeRef.current > CAPTURE_INTERVAL_MS) {
-        setTimeout(() => captureCanvas(), 0);
-        lastCaptureTimeRef.current = now;
-      }
-    }
   });
 
   return (
@@ -241,14 +192,9 @@ const CanvasContent = ({ myId, myName }: { myId: string; myName?: string }) => {
 };
 
 const Scene = ({ myId, myName }: { myId: string; myName?: string }) => {
-  const myIdRef = useRef(myId);
   const isStarted = useSimulationStore((state) => state.isStarted);
 
-  useEffect(() => {
-    myIdRef.current = myId;
-  }, [myId]);
-
-  useEventSource(myIdRef);
+  useEventSource(myId);
 
   if (!isStarted) {
     return <StartOverlay />;

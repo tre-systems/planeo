@@ -14,11 +14,17 @@ import {
   type BoxEventType,
 } from "../domain/box";
 import {
+  parseAgentsConfig,
+  parseConfigInt,
+  type AIAgent,
+} from "../domain/config";
+import {
   EventSchema,
   ValidatedEyeUpdatePayloadSchema,
   type EyeUpdateType,
 } from "../domain/event";
 import { EYE_Y_POSITION } from "../domain/sceneConstants";
+import { log } from "../lib/log";
 
 import type { Vec3 } from "../domain/common";
 
@@ -41,21 +47,6 @@ const BOX_COLORS = [
   "#FDFD33",
   "#FF7F00",
 ];
-
-const DEFAULT_AGENTS = [
-  { id: "ai-agent-1", displayName: "Orion" },
-  { id: "ai-agent-2", displayName: "Nova" },
-];
-
-type Agent = { id: string; displayName: string };
-
-const parseConfigInt = (
-  value: string | undefined,
-  fallback: number,
-): number => {
-  const parsed = parseInt(String(value ?? ""), 10);
-  return isNaN(parsed) || parsed < 0 ? fallback : parsed;
-};
 
 type Subscriber = { writer: WritableStreamDefaultWriter<Uint8Array> };
 
@@ -110,6 +101,7 @@ export class EventHub extends DurableObject<Env> {
     >();
     const subscriber: Subscriber = { writer: writable.getWriter() };
     this.subs.add(subscriber);
+    log.debug("hub", "subscriber added", { subscribers: this.subs.size });
     await this.scheduleAlarm();
 
     // Replay current world state to the new subscriber.
@@ -136,6 +128,7 @@ export class EventHub extends DurableObject<Env> {
   private drop(subscriber: Subscriber): void {
     if (!this.subs.delete(subscriber)) return;
     subscriber.writer.close().catch(() => {});
+    log.debug("hub", "subscriber dropped", { subscribers: this.subs.size });
   }
 
   private broadcast(msg: unknown): void {
@@ -273,7 +266,10 @@ export class EventHub extends DurableObject<Env> {
     this.agentsInitialized = true;
     if (this.totalAgents <= 0) return;
 
-    const agents = this.parseAgents().slice(0, this.totalAgents);
+    const agents: AIAgent[] = parseAgentsConfig(this.agentsConfig).slice(
+      0,
+      this.totalAgents,
+    );
     agents.forEach((agent, index) => {
       if (this.eyes.has(agent.id)) return;
       const x = 20 * (index + 1) * (index % 2 === 0 ? 1 : -1);
@@ -284,16 +280,5 @@ export class EventHub extends DurableObject<Env> {
         agent.displayName,
       );
     });
-  }
-
-  private parseAgents(): Agent[] {
-    if (!this.agentsConfig) return DEFAULT_AGENTS;
-    try {
-      const parsed = JSON.parse(this.agentsConfig);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed as Agent[];
-    } catch {
-      // fall through to defaults
-    }
-    return DEFAULT_AGENTS;
   }
 }

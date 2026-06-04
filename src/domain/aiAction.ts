@@ -17,12 +17,14 @@ const NoActionSchema = z.object({
   type: z.literal("none"),
 });
 
-export const AIActionSchema = z.union([
-  MoveActionSchema,
-  TurnActionSchema,
-  NoActionSchema,
-  z.null(), // Allow null for no action
-]);
+// A tagged union of the action variants; null means "no action".
+export const AIActionSchema = z
+  .discriminatedUnion("type", [
+    MoveActionSchema,
+    TurnActionSchema,
+    NoActionSchema,
+  ])
+  .nullable();
 
 export type AIAction = z.infer<typeof AIActionSchema>;
 
@@ -30,7 +32,6 @@ export type AIAction = z.infer<typeof AIActionSchema>;
 export const AIResponseSchema = z.object({
   chatMessage: z.string().optional(),
   action: AIActionSchema,
-  audioSrc: z.string().optional(),
 });
 
 export type ParsedAIResponse = z.infer<typeof AIResponseSchema>;

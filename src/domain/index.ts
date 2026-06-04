@@ -1,8 +1,8 @@
 export { Vec3Schema, type Vec3 } from "./common";
 
 export {
-  EyeUpdateSchema as EventEyeUpdateSchema,
-  type EyeUpdateType as EventEyeUpdateType,
+  EyeUpdateSchema,
+  type EyeUpdateType,
   EventSchema,
   type EventType,
 } from "./event";
@@ -12,8 +12,6 @@ export {
   type EyeStatus,
   EyeStateSchema,
   type EyeState,
-  EyeUpdatePayloadSchema,
-  type EyeUpdateType,
   INITIAL_SCALE,
   TARGET_SCALE,
   FADE_DURATION,

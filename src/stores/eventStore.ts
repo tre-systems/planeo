@@ -12,6 +12,8 @@ import {
   ChatMessageEventType,
   ChatMessageEventSchema,
 } from "@/domain/event";
+import { exposeStoreForDebug } from "@/lib/exposeStore";
+import { log } from "@/lib/log";
 import { throttle } from "@/lib/utils";
 
 import { useBoxStore } from "./boxStore";
@@ -21,13 +23,6 @@ import { useRawEyeEventStore } from "./rawEyeEventStore";
 type EyeUpdateEventListener = (event: EyeUpdateType) => void;
 type ChatMessageEventListener = (event: ChatMessageEventType) => void;
 type BoxEventListener = (event: BoxEventType) => void;
-
-// Augment the Window interface for the debug store
-declare global {
-  interface Window {
-    __eventStore?: typeof useEventStore;
-  }
-}
 
 interface EventStoreState {
   isConnected: boolean;
@@ -266,49 +261,38 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
 
     _handleMessage: (event: MessageEvent) => {
       try {
-        const rawData = JSON.parse(event.data);
-        const parsedEvent = EventSchema.safeParse(rawData);
-
-        if (parsedEvent.success) {
-          const data = parsedEvent.data;
-          if (data.type === "eyeUpdate") {
-            useRawEyeEventStore.getState().setEye(data as EyeUpdateType);
-
-            // Dispatch to current listeners
-            // Making a copy of listeners array before iterating to avoid issues if a listener unsubscribes during iteration
-            [...get().listeners.eyeUpdate].forEach((callback) =>
-              callback(data as EyeUpdateType),
-            );
-          } else if (data.type === "chatMessage") {
-            [...get().listeners.chatMessage].forEach((callback) =>
-              callback(data as ChatMessageEventType),
-            );
-          } else if (data.type === "box") {
-            const boxEvent = data as BoxEventType;
-            [...get().listeners.box].forEach((callback) => callback(boxEvent));
-          }
-        } else {
-          console.error(
-            "Failed to parse general event:",
-            parsedEvent.error.flatten(),
-            "Data:",
-            rawData,
-          );
+        const parsedEvent = EventSchema.safeParse(JSON.parse(event.data));
+        if (!parsedEvent.success) {
+          log.error("sse", "Failed to parse event", {
+            details: parsedEvent.error.flatten(),
+          });
           set({ lastError: "Failed to parse event data" });
+          return;
+        }
+
+        // `data` is already narrowed by the discriminated union — no casts.
+        // Copy the listener array so a listener can unsubscribe mid-dispatch.
+        const data = parsedEvent.data;
+        if (data.type === "eyeUpdate") {
+          useRawEyeEventStore.getState().setEye(data);
+          [...get().listeners.eyeUpdate].forEach((callback) => callback(data));
+        } else if (data.type === "chatMessage") {
+          [...get().listeners.chatMessage].forEach((callback) =>
+            callback(data),
+          );
+        } else if (data.type === "box") {
+          [...get().listeners.box].forEach((callback) => callback(data));
         }
       } catch (error) {
-        console.error(
-          "Error processing SSE message:",
-          error,
-          "Data:",
-          event.data,
-        );
+        log.error("sse", "Error processing SSE message", {
+          error: String(error),
+        });
         set({ lastError: "Error processing SSE message" });
       }
     },
 
-    _handleError: (event: Event) => {
-      console.error("EventSource encountered an error:", event);
+    _handleError: () => {
+      log.error("sse", "EventSource connection error");
       set((state) => {
         state.lastError = "EventSource connection error";
         state.isConnected = false;
@@ -318,10 +302,4 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
   })),
 );
 
-if (
-  typeof window !== "undefined" &&
-  (process.env.NODE_ENV !== "production" ||
-    process.env["NEXT_PUBLIC_E2E"] === "true")
-) {
-  window.__eventStore = useEventStore;
-}
+exposeStoreForDebug("__eventStore", useEventStore);

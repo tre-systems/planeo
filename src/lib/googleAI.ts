@@ -2,6 +2,9 @@
 
 import { GoogleGenAI, GenerationConfig } from "@google/genai";
 
+import { log } from "./log";
+import { retry } from "./retry";
+
 // Singleton client instance
 let genAIClient: GoogleGenAI | null = null;
 
@@ -29,18 +32,11 @@ export const getGoogleAIClient = async (): Promise<GoogleGenAI> => {
 
   const apiKey = process.env["GOOGLE_AI_API_KEY"];
   if (!apiKey) {
-    console.error("GoogleAI: GOOGLE_AI_API_KEY is not set.");
-    throw new Error("GoogleAI: GOOGLE_AI_API_KEY is not set.");
+    throw new Error("GOOGLE_AI_API_KEY is not set");
   }
 
-  try {
-    genAIClient = new GoogleGenAI({ apiKey });
-    console.log("GoogleAI: Client initialized successfully.");
-    return genAIClient;
-  } catch (error) {
-    console.error("GoogleAI: Failed to initialize client:", error);
-    throw error; // Re-throw the error to be handled by the caller
-  }
+  genAIClient = new GoogleGenAI({ apiKey });
+  return genAIClient;
 };
 
 /**
@@ -107,35 +103,25 @@ export const generateTextCompletion = async (
       safetySettings: [], // Consider making safety settings configurable
     };
 
-    console.log("AI Text Completion Prompt:", JSON.stringify(request, null, 2));
+    log.debug("ai.text", "Requesting completion");
 
-    const result = await genAI.models.generateContent(request);
+    const result = await retry(() => genAI.models.generateContent(request), {
+      attempts: 2,
+    });
     const text = result.text;
 
-    console.log("AI Text Completion Response:", text);
-
     if (!text || text.trim() === "") {
-      console.warn("AI Text Completion: Received empty response from model.");
+      log.warn("ai.text", "Empty response from model");
       return undefined;
     }
 
     return text;
   } catch (error) {
-    console.error("AI Text Completion: Error during generation:", error);
-    // Check for GoogleAIError specific details
-    if (error instanceof Error) {
-      const gError = error as GoogleAIError;
-      if (
-        gError.response?.candidates &&
-        gError.response.candidates.length > 0 &&
-        gError.response.candidates[0]?.safetyRatings
-      ) {
-        console.error(
-          "AI Text Completion: Safety feedback:",
-          gError.response.candidates[0]?.safetyRatings,
-        );
-      }
-    }
+    const gError = error as GoogleAIError;
+    log.error("ai.text", "Error during generation", {
+      error: error instanceof Error ? error.message : String(error),
+      safety: gError.response?.candidates?.[0]?.safetyRatings,
+    });
     return undefined; // Return undefined on error to allow graceful handling
   }
 };

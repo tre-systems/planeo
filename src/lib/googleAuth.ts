@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 
+import { retry } from "./retry";
+
 // Mints a Google Cloud OAuth2 access token from a service-account key using the
 // Web Crypto API (RS256), so it works on the Cloudflare Workers runtime (the
 // gRPC @google-cloud/* client libraries do not). Used by the TTS REST call.
@@ -84,25 +86,22 @@ export const getGoogleAccessToken = async (): Promise<string> => {
   const sa = ServiceAccountSchema.parse(JSON.parse(credsJson));
   const assertion = await signJwt(sa);
 
-  const res = await fetch(sa.token_uri, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
-    }),
+  const data = await retry(async () => {
+    const res = await fetch(sa.token_uri, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion,
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(
+        `Google token exchange failed: ${res.status} ${await res.text()}`,
+      );
+    }
+    return (await res.json()) as { access_token: string; expires_in: number };
   });
-
-  if (!res.ok) {
-    throw new Error(
-      `Google token exchange failed: ${res.status} ${await res.text()}`,
-    );
-  }
-
-  const data = (await res.json()) as {
-    access_token: string;
-    expires_in: number;
-  };
   cached = {
     token: data.access_token,
     expiresAt: Date.now() + data.expires_in * 1000,

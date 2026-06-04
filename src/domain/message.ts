@@ -6,7 +6,6 @@ export const MessageSchema = z.object({
   name: z.string().optional(),
   text: z.string().min(1),
   timestamp: z.number(), // Unix timestamp
-  audioSrc: z.string().optional(),
 });
 
 export type Message = z.infer<typeof MessageSchema>;

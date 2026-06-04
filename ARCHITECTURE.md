@@ -38,7 +38,7 @@ one instance. To run multiple independent worlds you would shard by DO name
 | `src/app/actions/`             | Server actions: `generateMessage.ts` (AI vision/action/chat), `aiControllerActions.ts` (`requestAiDecision` wrapper), `tts.ts` (Google Cloud TTS via REST).                    |
 | `src/server/eventHub.ts`       | The `EventHub` Durable Object: the single real-time authority (eyes, boxes, open SSE connections) and the SSE endpoint handler.                                                |
 | `worker.ts`                    | Custom Worker entry: re-exports `EventHub`, routes `/api/events` to the DO, delegates everything else to the Next.js app.                                                      |
-| `src/lib/`                     | `googleAI.ts` (Gemini client + model selection), `googleAuth.ts` (Web Crypto OAuth token for Google Cloud), `audioService.ts`, `env.ts`.                                       |
+| `src/lib/`                     | `googleAI.ts` (Gemini client + model selection), `googleAuth.ts` (Web Crypto OAuth), `log.ts` (structured logger), `retry.ts`, `exposeStore.ts`.                               |
 | `src/stores/`                  | Zustand stores (see below).                                                                                                                                                    |
 | `src/domain/`                  | Zod schemas and shared constants (the data contracts).                                                                                                                         |
 | `wrangler.jsonc`               | Worker config: `main = worker.ts`, the `EVENT_HUB` Durable Object binding + migration, non-secret `vars`.                                                                      |
@@ -175,13 +175,12 @@ raw eye records into the animated `eyesStore` for rendering.
 
 ### Wire protocol
 
-| `type`        | Direction       | Payload                                                                                                                                                                            |
-| ------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `eyeUpdate`   | both            | `id`, `name?`, `p?` (position), `l?` (lookAt), `t`                                                                                                                                 |
-| `chatMessage` | both            | a `Message` (`id`, `userId`, `name?`, `text`, `timestamp`, `audioSrc?`)                                                                                                            |
-| `box`         | server → client | `id`, `p`, `o` (orientation), `c` (color), `t`                                                                                                                                     |
-| `boxUpdate`   | client → server | `id`, `p?`, `o?` (drives `setBox`)                                                                                                                                                 |
-| `aiVision`    | client → server | accepted by the schema but **has no handler** — the human-camera capture posted from `Scene.tsx` is discarded. The live AI vision path is the server action below, not this event. |
+| `type`        | Direction       | Payload                                                    |
+| ------------- | --------------- | ---------------------------------------------------------- |
+| `eyeUpdate`   | both            | `id`, `name?`, `p?` (position), `l?` (lookAt), `t`         |
+| `chatMessage` | both            | a `Message` (`id`, `userId`, `name?`, `text`, `timestamp`) |
+| `box`         | server → client | `id`, `p`, `o` (orientation), `c` (color), `t`             |
+| `boxUpdate`   | client → server | `id`, `p?`, `o?` (drives `setBox`)                         |
 
 ## AI agents
 
@@ -213,7 +212,7 @@ drives two cadences:
 side: it builds the agent's "newly-awakened, disoriented" persona prompt, calls
 Gemini with `responseMimeType: "application/json"` (`temperature 0.4`,
 `maxOutputTokens 150`), strips code fences, and validates the result against
-`AIResponseSchema` (`{ chatMessage?, action, audioSrc? }`). If there's a chat
+`AIResponseSchema` (`{ chatMessage?, action }`). If there's a chat
 message it broadcasts it to the `EventHub` DO via the `EVENT_HUB` binding
 (`getCloudflareContext().env`). It then **awaits a fixed `setTimeout(5000)`
 before returning** — this server-side pause, not any client constant, is what
@@ -228,22 +227,16 @@ most recent message is from the human user, after a `1500–2500 ms` delay it as
 
 ## Audio / TTS
 
-There are two audio paths, and only one is live:
-
-- **Live:** [`tts.ts`](src/app/actions/tts.ts) `synthesizeSpeechAction` is real
-  Google Cloud TTS, called over the **REST API**
-  (`texttospeech.googleapis.com`). Auth is an OAuth access token minted from the
-  `GOOGLE_APP_CREDS_JSON` service-account key with the Web Crypto API (RS256) in
-  [`googleAuth.ts`](src/lib/googleAuth.ts) — the gRPC `@google-cloud/*` client
-  cannot run on the Workers runtime. It deterministically assigns each `userId`
-  one of 24 Chirp3-HD voices (by hash), synthesizes MP3, and returns base64.
-  [`ChatMessage.tsx`](src/components/ChatMessage.tsx) calls it client-side for
-  each incoming message (skipping the user's own and `/`-commands) and plays the
-  audio. Disabled when `NEXT_PUBLIC_TTS_ENABLED` is exactly `"false"`.
-- **Vestigial:** [`audioService.ts`](src/lib/audioService.ts) `generateAudio`
-  returns a hardcoded test clip (a T-Rex roar) and is stored as a message's
-  `audioSrc` on the server, but the client never reads `audioSrc`. See
-  [`docs/BACKLOG.md`](docs/BACKLOG.md).
+[`tts.ts`](src/app/actions/tts.ts) `synthesizeSpeechAction` is real Google Cloud
+TTS, called over the **REST API** (`texttospeech.googleapis.com`). Auth is an
+OAuth access token minted from the `GOOGLE_APP_CREDS_JSON` service-account key
+with the Web Crypto API (RS256) in [`googleAuth.ts`](src/lib/googleAuth.ts) — the
+gRPC `@google-cloud/*` client cannot run on the Workers runtime. It
+deterministically assigns each `userId` one of 24 Chirp3-HD voices (by hash),
+synthesizes MP3, and returns base64.
+[`ChatMessage.tsx`](src/components/ChatMessage.tsx) calls it client-side for each
+incoming message (skipping the user's own and `/`-commands) and plays the audio.
+Disabled when `NEXT_PUBLIC_TTS_ENABLED` is exactly `"false"`.
 
 ## State (Zustand stores)
 

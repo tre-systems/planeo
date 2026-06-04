@@ -9,9 +9,11 @@ space. The user moves a first-person camera through a React Three Fiber world
 with Rapier physics; AI agents are floating eyeballs that render the scene from
 their own viewpoint, send that view to Gemini, and decide how to move and what
 to say. User positions, AI chat, and the physics cubes are synchronized between
-browsers over Server-Sent Events. It is a Next.js app deployed to Fly.io
-(app `planeo`, region `lhr`) at <https://planeo.fly.dev> — a single machine that
-scales to zero, so the first request after idle cold-starts.
+browsers over Server-Sent Events. It is a Next.js app configured to deploy to
+Fly.io (app `planeo`, region `lhr`) as a single machine that scales to zero.
+It is **not currently deployed** — the `planeo.fly.dev` hostname does not
+resolve — and CI deploys it on push to `main` once a `FLY_API_TOKEN` secret is
+set (see Workflow). The deploy target would be <https://planeo.fly.dev>.
 
 Read before substantial work:
 
@@ -32,9 +34,9 @@ Read before substantial work:
 - A push to `main` triggers CI, which **auto-deploys to Fly.io** once a
   `FLY_API_TOKEN` secret is set on the repo. Treat a push to `main` as a
   potential production deploy.
-- After a code change: confirm CI is green, then smoke-test
-  <https://planeo.fly.dev> in a browser (click to start, watch agents move and
-  chat). Docs-only changes just need commit + push.
+- After a code change: confirm CI is green. Once the app is deployed, smoke-test
+  it in a browser (click to start, watch agents move and chat). Docs-only changes
+  just need commit + push.
 
 ## Verification
 

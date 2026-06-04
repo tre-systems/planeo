@@ -1,6 +1,6 @@
 # Planeo
 
-[![CI/CD](https://github.com/rgilks/planeo/actions/workflows/fly.yml/badge.svg)](https://github.com/rgilks/planeo/actions/workflows/fly.yml)
+[![CI/CD](https://github.com/tre-systems/planeo/actions/workflows/fly.yml/badge.svg)](https://github.com/tre-systems/planeo/actions/workflows/fly.yml)
 
 ![planeo Screenshot](/screenshots/loaded.png)
 

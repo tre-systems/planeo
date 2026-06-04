@@ -14,7 +14,9 @@
     "lint": "next lint",
     "diagrams": "node scripts/render-diagrams.mjs",
     "check:diagrams": "node scripts/check-diagrams.mjs",
-    "verify": "prettier --write . && next lint --fix --no-cache && npx tsc --noEmit && node scripts/check-diagrams.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "prettier --write . && next lint --fix --no-cache && npx tsc --noEmit && node scripts/check-diagrams.mjs && vitest run",
     "check": "npm run verify && npx playwright test --reporter=list",
     "deps": "npx npm-check-updates",
     "deps:update": "npx npm-check-updates -u && npm run nuke",
@@ -61,6 +63,7 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "typescript-eslint": "^8.32.1",
+    "vitest": "^4.1.8",
     "wrangler": "^4.97.0"
   }
 }

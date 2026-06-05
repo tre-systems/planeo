@@ -11,19 +11,20 @@ their own viewpoint, send that view to Gemini, and decide how to move and what
 to say. User positions, AI chat, and the physics cubes are synchronized between
 browsers over Server-Sent Events. It is a Next.js app that runs on **Cloudflare
 Workers** via the `@opennextjs/cloudflare` adapter, with a single `EventHub`
-Durable Object as the real-time authority. It is live at
-<https://planeo.rob-gilks.workers.dev>, and CI redeploys it on every push to
-`main`. A `planeo.tre.systems` custom domain is an optional one-line
-`wrangler.jsonc` add, not yet configured.
+Durable Object as the real-time authority. CI redeploys it on every push to
+`main` **when the `DEPLOY_ENABLED` repo variable is `true`** — currently unset,
+so the app is not presently deployed. The `planeo.tre.systems` custom domain is
+configured in `wrangler.jsonc` (`routes`) and takes effect once it is.
 
 Read before substantial work:
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — system overview, codebase map, the SSE
-  wire protocol, the AI loop, and the constants that matter.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the comprehensive technical reference:
+  system overview, codebase map, patterns, the SSE wire protocol, the AI loop,
+  and the constants that matter.
 - [`docs/BACKLOG.md`](docs/BACKLOG.md) — known limitations and intentional gaps.
   Read it before "fixing" something that is already a tracked, deliberate quirk.
-- [`docs/`](docs/) — per-feature detail (AI agents, vision, SSE, chat, physics,
-  TTS, camera, cube art).
+- [`docs/diagrams/`](docs/diagrams/) — Graphviz architecture diagrams; the
+  rendered PNGs are embedded in `ARCHITECTURE.md`.
 
 ## Workflow
 
@@ -31,12 +32,15 @@ Read before substantial work:
   worktrees, or PRs unless explicitly asked.
 - Check `git status` before editing. Stage only the files owned by the current
   task; avoid `git add -A`.
-- A push to `main` triggers CI, which **auto-deploys to Cloudflare Workers**
-  once `CLOUDFLARE_API_TOKEN` (and `CLOUDFLARE_ACCOUNT_ID`) secrets are set on
-  the repo. Treat a push to `main` as a potential production deploy.
-- After a code change: confirm CI is green, then smoke-test
-  <https://planeo.rob-gilks.workers.dev> in a browser (click to start, watch
-  agents move and chat). Docs-only changes just need commit + push.
+- A push to `main` triggers CI. It **auto-deploys to Cloudflare Workers** only
+  when the `DEPLOY_ENABLED` repo variable is `true` (with the
+  `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets); it is currently
+  unset, so the app is not presently deployed. Treat a deploy-enabled push to
+  `main` as a production deploy.
+- After a code change: confirm CI is green. If the app is deployed, smoke-test it
+  in a browser (click to start, watch agents move and chat); otherwise verify
+  real-time behavior locally with `npm run preview`. Docs-only changes just need
+  commit + push.
 
 ## Verification
 

@@ -7,9 +7,10 @@ the scene from their own viewpoint, decide how to move, and chat. Everyone's
 positions, the AI chat, and the physics cubes are synced between browsers over
 Server-Sent Events (SSE).
 
-This document describes how the running system fits together. For per-feature
-detail see [`docs/`](docs/); for known gaps and planned work see
-[`docs/BACKLOG.md`](docs/BACKLOG.md).
+This document is the comprehensive technical reference for how the running
+system fits together. For known gaps and planned work see
+[`docs/BACKLOG.md`](docs/BACKLOG.md); for the contributor/agent workflow see
+[`AGENTS.md`](AGENTS.md).
 
 ![Planeo system overview](docs/diagrams/system-overview.png)
 
@@ -141,9 +142,10 @@ are tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md#pattern-consistency--gaps).
   stored assignments (per-user TTS voice, per-box color).
 - **Env-gated debug handles.** Stores attach to `window.__store` only outside
   production (or under `NEXT_PUBLIC_E2E`).
-- **Docs layering.** This `ARCHITECTURE.md` (the overview) + focused `docs/*` per
-  feature + `docs/BACKLOG.md` for gaps and forward work; `AGENTS.md`/`CLAUDE.md`
-  for workflow.
+- **One technical reference.** This `ARCHITECTURE.md` is the comprehensive
+  overview; `docs/BACKLOG.md` tracks gaps and forward work, and
+  `AGENTS.md`/`CLAUDE.md` cover the workflow. Per-feature prose is folded in here
+  rather than scattered across docs that drift out of sync with the code.
 
 ## Render & input
 
@@ -205,15 +207,24 @@ raw eye records into the animated `eyesStore` for rendering.
 | `boxUpdate`   | client → server | `id`, `p?`, `o?` (drives `setBox`)                         |
 | `host`        | server → client | `hostId` (the elected simulation host's client id)         |
 
-### Physics cubes
+### Physics
 
-The cubes are simulated by Rapier on the **host** only: there each box is a
-`dynamic` rigid body, and [`Box.tsx`](src/app/components/Box.tsx) transmits its
-pose (change-detected, rounded) as `boxUpdate` events. On every other client the
-same boxes are `kinematicPosition` bodies that follow the `box` events the host
-produces (lerped toward the target by `boxStore.updateBoxAnimations`). The
-`RigidBody` is keyed on the host/viewer role, so it cleanly remounts with the
-right body type when the host changes.
+The world runs one Rapier `<Physics>` simulation. The cubes are simulated on the
+**host** only: there each box is a `dynamic` rigid body, and
+[`Box.tsx`](src/app/components/Box.tsx) transmits its pose (change-detected,
+rounded) as `boxUpdate` events. On every other client the same boxes are
+`kinematicPosition` bodies that follow the `box` events the host produces (lerped
+toward the target by `boxStore.updateBoxAnimations`). The `RigidBody` is keyed on
+the host/viewer role, so it cleanly remounts with the right body type when the
+host changes. Eyes (users and agents) are `kinematicPosition` bodies with a
+`BallCollider` (radius `EYE_RADIUS`): driven by input/AI rather than gravity, but
+able to nudge the dynamic cubes.
+
+Each cube also shows a piece of art on one randomly chosen face (the other five
+keep the box color). The image and face are picked once per client with
+`Math.random()` from a fixed set under [`public/art/`](public/art/) (Met Museum
+Open Access, served locally) and held in `useState` — so, unlike the
+server-authoritative color, the art is **not** synced across clients.
 
 ## AI agents
 
@@ -345,11 +356,13 @@ The app runs on **Cloudflare Workers** via the
 - `npm run deploy` — `opennextjs-cloudflare build && opennextjs-cloudflare deploy`.
 - `npm run cf-typegen` — `wrangler types`; rerun after editing `wrangler.jsonc`.
 
-The app is live at <https://planeo.rob-gilks.workers.dev>. CI is
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml): a `check` job
+CI is [`.github/workflows/ci.yml`](.github/workflows/ci.yml): a `check` job
 (`npm run verify`) gates every push and PR, and a `deploy` job builds with
-OpenNext and ships via [`cloudflare/wrangler-action`](https://github.com/cloudflare/wrangler-action)
-on push to `main`, using the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
-secrets (the deploy step skips cleanly if the token is absent). A
-`planeo.tre.systems` custom domain is an optional one-line
-`routes`/`custom_domain` add in `wrangler.jsonc`, not yet configured.
+OpenNext and ships to Cloudflare via
+[`cloudflare/wrangler-action`](https://github.com/cloudflare/wrangler-action) on
+push to `main`. Auto-deploy is gated behind the `DEPLOY_ENABLED` repo variable,
+currently unset — so the app is **not currently deployed**. Set it to `true`
+(`gh variable set DEPLOY_ENABLED --body true`), with the `CLOUDFLARE_API_TOKEN`
+and `CLOUDFLARE_ACCOUNT_ID` secrets, to re-enable. The `planeo.tre.systems`
+custom domain is already configured in [`wrangler.jsonc`](wrangler.jsonc)
+(`routes`) and takes effect once deployed.

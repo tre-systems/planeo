@@ -30,9 +30,11 @@ to look before "fixing" something that is already a tracked, intentional quirk.
 - **`next dev` serves the UI only.** The real-time hub (`/api/events` + the
   `EventHub` DO) is wired in `worker.ts` and only runs under the Workers runtime.
   Use `npm run preview` to exercise real-time locally.
-- **No custom domain yet.** The app is live at `planeo.rob-gilks.workers.dev`
-  (CI auto-deploys on push to `main`). A `planeo.tre.systems` custom domain is an
-  optional one-line `wrangler.jsonc` add and is not yet configured.
+- **Auto-deploy paused.** CI deploys to Cloudflare Workers on push to `main`
+  only when the `DEPLOY_ENABLED` repo variable is `true`; it is currently unset,
+  so the app is not deployed. The `planeo.tre.systems` custom domain is already
+  configured in `wrangler.jsonc` (`routes`) and takes effect once deploy is
+  re-enabled.
 - **PWA dropped.** `next-pwa` is removed, so there is no service worker /
   offline support (the `manifest.json` link in `layout.tsx` remains). It could
   be re-added with a Workers-compatible service worker such as Serwist.
@@ -40,18 +42,8 @@ to look before "fixing" something that is already a tracked, intentional quirk.
 ## Pattern consistency & gaps
 
 The patterns the code follows are documented in
-[`ARCHITECTURE.md`](../ARCHITECTURE.md#patterns). The earlier consistency
-deviations have been reconciled: one canonical `EyeUpdate` schema; graceful
-server-action failure (`getGoogleAIClient` inside the try) with `safeParse`d
-inputs; one Workers-safe config helper ([`src/domain/config.ts`](../src/domain/config.ts))
-shared by the actions and the DO; immer + a shared debug-handle helper across
-stores; casts removed after parsing; a structured logger
-([`src/lib/log.ts`](../src/lib/log.ts)) + retry/backoff
-([`src/lib/retry.ts`](../src/lib/retry.ts)) on the Gemini/TTS/OAuth calls;
-`useShallow` on the chat toggle; SSE teardown on unmount; and the vestigial
-`aiVision` and `generateAudio`/`audioSrc` paths removed.
-
-Deliberately not done yet:
+[`ARCHITECTURE.md`](../ARCHITECTURE.md#patterns). Known places the code does not
+yet follow them cleanly, deliberately left for now:
 
 - **Single top-level animation-tick loop.** Three `useFrame` updaters
   (`boxStore`, `eyesStore`, `useAIAgentController`) still run independently.
@@ -71,12 +63,13 @@ Deliberately not done yet:
 
 ## Forward-looking work
 
-- **Finish the speech experience** — the Chirp3 TTS path works but the docs
-  once described per-message status indicators in the chat UI that aren't built.
+- **Speech UI polish** — the Chirp3 TTS path works, but there are no per-message
+  playback/status indicators in the chat UI.
 - **User-to-user chat** — humans can currently only see AI messages.
 - **More agent behavior** — memory across decisions, agent-to-agent dialogue,
   and richer actions beyond `move`/`turn`.
-- **Tests** — there are no unit tests. The `src/domain/` Zod schemas and the
-  `EventHub` DO logic are the highest-value first targets; e2e coverage could
-  move into a non-gating CI job.
+- **More tests** — vitest covers the `src/domain/` schemas and `src/lib/retry`;
+  the `EventHub` DO logic is the highest-value gap (it needs the Workers test
+  pool to exercise). The Playwright e2e suite runs locally via `npm run check`,
+  not yet in CI.
 - **Persistent profiles** — identities are ephemeral `nanoid` ids today.

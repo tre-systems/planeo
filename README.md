@@ -10,18 +10,16 @@
 
 Planeo is an interactive 3D web application where users and AI agents coexist and interact in a shared environment. It showcases real-time multi-user communication, AI-driven agents with vision and speech capabilities, and a dynamic physics-based world.
 
-**Live:** <https://planeo.rob-gilks.workers.dev>
-
 ## Core Features
 
 - **3D Environment:** Interactive 3D space built with React Three Fiber.
 - **Real-time Multi-user Interaction:** See other users' movements (represented as eyeballs) in real-time using Server-Sent Events (SSE).
-- **AI Agents with Vision, Actions & Speech:** AI agents (configurable, default to "Orion" and "Nova") perceive their surroundings, generate chat messages, and perform actions (like moving or turning). Their visual perspective is updated at ~10 FPS and a Gemini decision is made roughly every few seconds. ([Details](/docs/ai-agents.md), [Vision Details](/docs/ai-agent-vision.md), [Interaction Flow](/docs/ai-interaction-flow.md))
-- **Chat Functionality:** View messages from AI agents in a shared chat window. ([Details](/docs/chat.md))
-- **Text-to-Speech (TTS):** AI chat messages are spoken aloud using Google Cloud TTS (Chirp3 voices), with a distinct voice assigned per speaker. Requires `GOOGLE_APP_CREDS_JSON`; disable by setting `NEXT_PUBLIC_TTS_ENABLED=false`. ([Details](/docs/text-to-speech.md))
+- **AI Agents with Vision, Actions & Speech:** AI agents (configurable, default to "Orion" and "Nova") perceive their surroundings, generate chat messages, and perform actions (like moving or turning). Their visual perspective updates at ~10 FPS and a Gemini decision is made roughly every 5 seconds.
+- **Chat Functionality:** View messages from AI agents in a shared chat window.
+- **Text-to-Speech (TTS):** AI chat messages are spoken aloud using Google Cloud TTS (Chirp3 voices), with a distinct voice assigned per speaker. Requires `GOOGLE_APP_CREDS_JSON`; disable by setting `NEXT_PUBLIC_TTS_ENABLED=false`.
 - **Keyboard Navigation:** Control your camera movement and orientation using keyboard inputs.
-- **Physics-based World:** Interact with objects like falling cubes in an environment governed by physics. ([Details](/docs/physics.md))
-- **Randomized Cube Art:** Falling cubes display random artwork from a local collection on one face. ([Details](/docs/cube-art-textures.md))
+- **Physics-based World:** Interact with objects like falling cubes in an environment governed by physics.
+- **Randomized Cube Art:** Falling cubes display random artwork from a local collection on one face.
 
 ## Simulation Start
 
@@ -69,7 +67,6 @@ Follow these instructions to set up and run Planeo on your local machine.
     - `GOOGLE_APP_CREDS_JSON` (Optional, for TTS): Google Cloud service-account
       JSON (single line) for the Text-to-Speech REST API.
       - _Used by: `src/app/actions/tts.ts` via `src/lib/googleAuth.ts`._
-      - See `docs/text-to-speech.md` for setup.
 
     Non-secret world configuration lives in [`wrangler.jsonc`](wrangler.jsonc)
     under `vars`:
@@ -78,7 +75,6 @@ Follow these instructions to set up and run Planeo on your local machine.
       not set, defaults to two agents (Orion and Nova).
       - _Example: `[{"id":"custom-ai-1","displayName":"Custom AI Alpha"},{"id":"custom-ai-2","displayName":"Custom AI Beta"}]`_
       - _Used by: `src/domain/aiAgent.ts`, `src/server/eventHub.ts`._
-      - See `docs/ai-agents.md` for more details.
     - `TOTAL_AGENTS` (Optional): The maximum number of AI agents given starting
       positions. Defaults to 0.
       - _Used by: `src/server/eventHub.ts`._
@@ -122,11 +118,12 @@ Deploy from your machine with:
 npm run deploy
 ```
 
-Pushing to `main` also deploys automatically via GitHub Actions
-([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) using the
-`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets. The app is live at
-<https://planeo.rob-gilks.workers.dev>; a `planeo.tre.systems` custom domain is an
-optional one-line addition to `wrangler.jsonc` and is not yet configured.
+Pushing to `main` runs CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
+and deploys automatically **when the `DEPLOY_ENABLED` repo variable is `true`**,
+using the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets. It is
+currently unset, so the app is not presently deployed. The `planeo.tre.systems`
+custom domain is configured in `wrangler.jsonc` (`routes`) and takes effect once
+it is deployed.
 
 Production secrets (`GOOGLE_AI_API_KEY`, `GOOGLE_APP_CREDS_JSON`) are set with
 `wrangler secret put <NAME>`.
@@ -144,44 +141,16 @@ Production secrets (`GOOGLE_AI_API_KEY`, `GOOGLE_APP_CREDS_JSON`) are set with
 - TypeScript
 - Zod (schema validation)
 
-## Technical Documentation
+## Documentation
 
-Start with [`ARCHITECTURE.md`](ARCHITECTURE.md) for the system overview, codebase map, and the SSE wire protocol. [`AGENTS.md`](AGENTS.md) holds the contributor/agent workflow, and [`docs/BACKLOG.md`](docs/BACKLOG.md) tracks known limitations and planned work.
-
-More detailed per-feature documentation can be found in the `docs/` folder:
-
-- `docs/ai-agents.md`: Details on AI agent behavior, configuration, and capabilities.
-- `docs/ai_services.md`: How the Gemini text and vision models are wired up.
-- `docs/ai-agent-vision.md`: Describes how AI agents perceive and display their environment.
-- `docs/chat.md`: Overview of the chat system.
-- `docs/physics.md`: Explanation of the physics simulation for objects in the 3D scene.
-- `docs/real-time-camera-movement.md`: Covers how camera/user movements are handled and synchronized.
-- `docs/sse-event-handling.md`: Describes the Server-Sent Events (SSE) mechanism for real-time updates.
-- `docs/text-to-speech.md`: Information on the text-to-speech functionality (Google Cloud TTS via the REST API).
-- `docs/ai-interaction-flow.md`: Details the synchronized flow of AI actions, chat, and audio playback.
-- `docs/cube-art-textures.md`: Details on how artwork is displayed on interactive cubes.
-
-## Planned Features
-
-The following are areas for future development (see [`docs/BACKLOG.md`](docs/BACKLOG.md) for the full list):
-
-- **Enhanced AI Capabilities:** More complex AI behaviors, memory across decisions, and agent-to-agent dialogue.
-- **User-to-User Chat:** Allowing human users to chat directly with each other.
-- **Expanded World Interactions:** More ways for users and AI to interact with the 3D environment and its objects.
-- **Persistent User Accounts/Profiles.**
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the comprehensive technical reference: system overview, codebase map, patterns, the SSE wire protocol, the AI loop, physics, TTS, and configuration.
+- [`AGENTS.md`](AGENTS.md) — contributor/agent workflow, verification commands, and architecture rules.
+- [`docs/BACKLOG.md`](docs/BACKLOG.md) — known limitations and planned work.
+- [`docs/diagrams/`](docs/diagrams/) — Graphviz architecture diagrams (the rendered PNGs are embedded in `ARCHITECTURE.md`).
 
 ## Contributing
 
-Contributions are welcome! Please follow these steps:
-
-1.  Fork the repository.
-2.  Create a new branch (`git checkout -b feature/your-feature-name`).
-3.  Make your changes.
-4.  Commit your changes (`git commit -m 'Add some feature'`).
-5.  Push to the branch (`git push origin feature/your-feature-name`).
-6.  Open a Pull Request.
-
-Please ensure your code adheres to the project's linting rules (`npm run lint`) and all checks pass (`npm run check`).
+See [`AGENTS.md`](AGENTS.md) for the workflow and architecture rules. Before pushing, run `npm run verify` (Prettier, ESLint, `tsc`, diagram check, and unit tests); `npm run check` adds the Playwright end-to-end suite.
 
 ## License
 

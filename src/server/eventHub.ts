@@ -13,11 +13,7 @@ import {
   ValidatedBoxUpdatePayloadSchema,
   type BoxEventType,
 } from "../domain/box";
-import {
-  parseAgentsConfig,
-  parseConfigInt,
-  type AIAgent,
-} from "../domain/config";
+import { parseAgentsConfig, parseConfigInt } from "../domain/config";
 import {
   EventSchema,
   ValidatedEyeUpdatePayloadSchema,
@@ -26,27 +22,21 @@ import {
 import { EYE_Y_POSITION } from "../domain/sceneConstants";
 import { log } from "../lib/log";
 
+import {
+  buildAgentSeedEyes,
+  buildInitialBoxes,
+  findStaleEyeIds,
+  mergeBox,
+  mergeEye,
+  pickHost,
+} from "./eventHubLogic";
+
 import type { Vec3 } from "../domain/common";
 
 const encoder = new TextEncoder();
 
 const PURGE_INTERVAL_MS = 10_000;
 const EYE_MAX_AGE_MS = 30_000;
-
-const BOX_COLORS = [
-  "#FF0000",
-  "#00FF00",
-  "#0000FF",
-  "#FFFF00",
-  "#FF00FF",
-  "#00FFFF",
-  "#FFA500",
-  "#FF69B4",
-  "#39FF14",
-  "#7D05EF",
-  "#FDFD33",
-  "#FF7F00",
-];
 
 type Subscriber = {
   writer: WritableStreamDefaultWriter<Uint8Array>;
@@ -154,7 +144,7 @@ export class EventHub extends DurableObject<Env> {
 
   // Elect the oldest connected client as host; broadcast only on change.
   private electHost(): void {
-    const newHost = this.subs.values().next().value?.clientId;
+    const newHost = pickHost([...this.subs].map((s) => s.clientId));
     if (newHost !== this.host) {
       this.host = newHost;
       if (this.host) this.broadcast({ type: "host", hostId: this.host });
@@ -219,45 +209,22 @@ export class EventHub extends DurableObject<Env> {
     l: Vec3 | undefined,
     name: string | undefined,
   ): void {
-    const existing = this.eyes.get(id);
-    const newP = p ?? existing?.p;
-    const newL = l ?? existing?.l;
-    const newName = name ?? existing?.name;
-
-    if (newP === undefined) return;
-
-    const msg: EyeUpdateType = { type: "eyeUpdate", id, t: Date.now() };
-    if (newP) msg.p = newP;
-    if (newL) msg.l = newL;
-    if (newName) msg.name = newName;
-
+    const msg = mergeEye(this.eyes.get(id), { id, p, l, name }, Date.now());
+    if (!msg) return;
     this.eyes.set(id, msg);
     this.broadcast(msg);
   }
 
   private setBox(id: string, p: Vec3 | undefined, o: Vec3 | undefined): void {
-    const existing = this.boxes.get(id);
-    const newP = p ?? existing?.p;
-    const newO = o ?? existing?.o;
-
-    if (newP === undefined || newO === undefined || !existing?.c) return;
-
-    const msg: BoxEventType = {
-      type: "box",
-      id,
-      p: newP,
-      o: newO,
-      c: existing.c,
-      t: Date.now(),
-    };
+    const msg = mergeBox(this.boxes.get(id), { id, p, o }, Date.now());
+    if (!msg) return;
     this.boxes.set(id, msg);
     this.broadcast(msg);
   }
 
   private purgeStale(): void {
-    const now = Date.now();
-    for (const [id, eye] of this.eyes) {
-      if (now - eye.t > EYE_MAX_AGE_MS) this.eyes.delete(id);
+    for (const id of findStaleEyeIds(this.eyes, Date.now(), EYE_MAX_AGE_MS)) {
+      this.eyes.delete(id);
     }
   }
 
@@ -268,17 +235,8 @@ export class EventHub extends DurableObject<Env> {
       this.boxesInitialized = true;
       return;
     }
-    for (let i = 0; i < this.numberOfBoxes; i++) {
-      const id = `box_${i + 1}`;
-      const position: Vec3 = [i * 15 - (this.numberOfBoxes - 1) * 7.5, 5, -20];
-      this.boxes.set(id, {
-        type: "box",
-        id,
-        p: position,
-        o: [0, 0, 0],
-        c: BOX_COLORS[i % BOX_COLORS.length],
-        t: Date.now(),
-      });
+    for (const box of buildInitialBoxes(this.numberOfBoxes, Date.now())) {
+      this.boxes.set(box.id, box);
     }
     this.boxesInitialized = true;
   }
@@ -288,19 +246,16 @@ export class EventHub extends DurableObject<Env> {
     this.agentsInitialized = true;
     if (this.totalAgents <= 0) return;
 
-    const agents: AIAgent[] = parseAgentsConfig(this.agentsConfig).slice(
-      0,
+    const seeds = buildAgentSeedEyes(
+      parseAgentsConfig(this.agentsConfig),
       this.totalAgents,
+      EYE_Y_POSITION,
+      Date.now(),
     );
-    agents.forEach((agent, index) => {
-      if (this.eyes.has(agent.id)) return;
-      const x = 20 * (index + 1) * (index % 2 === 0 ? 1 : -1);
-      this.setEye(
-        agent.id,
-        [x, EYE_Y_POSITION, 5],
-        [x, EYE_Y_POSITION, 0],
-        agent.displayName,
-      );
-    });
+    for (const eye of seeds) {
+      if (this.eyes.has(eye.id)) continue;
+      this.eyes.set(eye.id, eye);
+      this.broadcast(eye);
+    }
   }
 }

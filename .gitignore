@@ -50,6 +50,3 @@ next-env.d.ts
 
 # test results
 /test-results
-
-# Debugging output
-debug_images/

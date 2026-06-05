@@ -23,56 +23,30 @@ is already a tracked, deliberate quirk. The patterns the code follows are in
 
 Prioritised, P1 (highest value) → P3. None are known bugs in shipped behavior.
 
-### P1 — correctness & robustness
+### P2 — maintainability & robustness
 
-- **Resolve the dead eye fade-in scale.** `eyesStore` animates an `eye.scale`
-  (`INITIAL_SCALE → TARGET_SCALE`) that nothing renders — `Eyes.tsx` can't scale a
-  kinematic `RigidBody`. Either apply it to a mesh child or delete the dead state.
-- **Durable Object unit tests.** `eventHub` host election, the `setEye`/`setBox`
-  merges, and `purgeStale` have no unit coverage; add
-  `@cloudflare/vitest-pool-workers`.
-- **Wire-format version field on `EventSchema`.** No version discriminant, so a
-  long-lived DO can't detect client contract drift during a rollout.
-- **Seamless host handoff.** On host change the sim freezes briefly and cube
-  velocities aren't migrated (boxes resume at rest); snapshot velocity into the
-  `host` event for a clean handoff.
-
-### P2 — maintainability & consistency
-
+- **Break up the remaining large files.** `useAIAgentController` (318 lines) mixes
+  camera setup, offscreen capture, the decision call, and movement; `eventStore`
+  mixes the connection, listener registries, and senders. Extract cohesive units.
+  (`eventHub`'s pure logic is already split into `eventHubLogic.ts`.)
 - **Single top-level animation-tick loop.** Three `useFrame` updaters (`boxStore`,
   `eyesStore`, `useAIAgentController`) run independently; one tick would unify
   frame-rate handling.
-- **Break up the large files.** `useAIAgentController` (318 lines), `eventHub`
-  (310), and `eventStore` (289) each mix several concerns — e.g. the agent's
-  vision capture vs. decision loop, or the DO's SSE plumbing vs. state mutations.
-- **DRY the event-store senders.** `throttledSendBoxUpdate` and `sendChatMessage`
-  duplicate the POST + `safeParse` + error-handling block; extract one helper.
-- **Broader `useShallow`.** Only `ChatToggleButton` uses it; the frame-driven
-  container selectors (`Eyes`, `Box`, `useAIAgentController`) still read whole
-  records (the over-render is masked by the frame loop).
-- **Validate eye-update egress.** Box and chat egress `safeParse` before sending;
-  the eye-update hot path does not — the one asymmetry left.
-- **Rename `useAIAgentController`'s `getMessages`** — it is a value, not a getter.
+- **Seamless host handoff.** On host change the sim freezes briefly and cube
+  velocities aren't migrated (boxes resume at rest); snapshot velocity into the
+  `host` event for a clean handoff.
+- **Broader `useShallow`.** The frame-driven container selectors (`Eyes`, `Box`,
+  `useAIAgentController`) still read whole records — low impact, since the
+  over-render is masked by the frame loop.
 
-### P3 — minor cleanups (opportunistic; do when next in the file)
+### P3 — minor
 
-- `sceneConstants`: collapse the duplicate `GRID_Y_POSITION` / `GROUND_Y_POSITION`
-  (both `-20`).
-- `utils`: consolidate `roundVec3` / `roundArray` (identical rounding logic).
 - `googleAI`: make `getActiveTextModel` / `getActiveVisionModel` sync (they return
-  static literals) and drop the unread `displayName` / `maxTokens` fields.
-- `eyesStore`: remove the inert `changed` bookkeeping in `updateEyeAnimations` and
-  the unreachable `Vector3` re-init guards in `updateAIAgentTarget`.
-- `eventHub`: drop the redundant `p || l` / `p || o` guards in `handlePost` — the
-  `.refine()`d schemas already enforce them.
-- `box.ts`: drop the no-op `BoxEventSchema.extend({ type })` (identical to
-  `BoxSchema`).
-- `tts.ts`: reuse the exported `SynthesizeSpeechResult` type for `performSynthesis`'s
-  inline return.
-- `tests/api.spec.ts`: factor out the repeated `window as …` intersection cast.
-- `tsconfig`: scope `@playwright/test` types to the test files instead of globally.
-- Delete the stale local `debug_images/` directory and its `.gitignore` /
-  `.prettierignore` entries (no code writes it anymore).
+  static literals) — needs the one caller's `await` removed to satisfy the
+  await-thenable lint, so it's not a single-file change.
+- **Wire-format version field on `EventSchema`.** No version discriminant, so a
+  long-lived DO can't detect client contract drift during a rollout — add one when
+  the wire format next changes.
 
 ### Product / features
 
@@ -92,7 +66,10 @@ Prioritised, P1 (highest value) → P3. None are known bugs in shipped behavior.
 
 ### Ops / hygiene
 
-- **Triage `npm audit`** (19 findings: 1 low / 9 moderate / 9 high) — likely mostly
-  transitive/dev; resolve the real ones.
 - **Run the Playwright e2e in CI** as a non-gating job (it runs locally via
   `npm run check`).
+- **Dependency bump.** `npm audit` flags 19 issues, but all are dev/build-tooling
+  transitive (eslint, playwright, wrangler, postcss toolchains) or non-exploitable
+  in our usage (the prod `uuid` finding needs a `buf` argument we never pass) —
+  none reach the deployed worker. Clear them on a deliberate `npm run deps:update`
+  pass rather than a risky 28-package `audit fix`.

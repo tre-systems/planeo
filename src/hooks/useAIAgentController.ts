@@ -2,12 +2,7 @@
 
 import { useThree, useFrame } from "@react-three/fiber";
 import { useEffect, useRef, useCallback } from "react";
-import {
-  PerspectiveCamera,
-  WebGLRenderTarget,
-  Vector3,
-  LinearSRGBColorSpace,
-} from "three";
+import { PerspectiveCamera, WebGLRenderTarget } from "three";
 
 import { requestAiDecision } from "@/app/actions/aiControllerActions";
 import { getAIAgents } from "@/domain/aiAgent";
@@ -19,6 +14,9 @@ import { useAIVisionStore } from "@/stores/aiVisionStore";
 import { useCommunicationStore } from "@/stores/communicationStore";
 import { useEventStore } from "@/stores/eventStore";
 import { useEyesStore } from "@/stores/eyesStore";
+
+import { captureView } from "./aiAgentCapture";
+import { applyAgentAction } from "./aiAgentMovement";
 
 import type { EyeUpdateType, Vec3 as DomainVec3 } from "@/domain";
 import type { AIAction } from "@/domain/aiAction";
@@ -103,53 +101,7 @@ export const useAIAgentController = (myId: string) => {
       aiCamera.position.copy(agentState.position);
       aiCamera.lookAt(agentState.lookAt);
 
-      const originalRenderTarget = gl.getRenderTarget();
-      const originalOutputColorSpace = gl.outputColorSpace;
-
-      gl.setRenderTarget(aiRenderTarget);
-      gl.outputColorSpace = LinearSRGBColorSpace;
-      gl.render(mainScene, aiCamera);
-
-      const captureCanvas = document.createElement("canvas");
-      captureCanvas.width = CAPTURE_WIDTH;
-      captureCanvas.height = CAPTURE_HEIGHT;
-      const context = captureCanvas.getContext("2d");
-
-      if (context) {
-        const imageData = new Uint8Array(CAPTURE_WIDTH * CAPTURE_HEIGHT * 4);
-        gl.readRenderTargetPixels(
-          aiRenderTarget,
-          0,
-          0,
-          CAPTURE_WIDTH,
-          CAPTURE_HEIGHT,
-          imageData,
-        );
-
-        const bytesPerRow = CAPTURE_WIDTH * 4;
-        const halfHeight = CAPTURE_HEIGHT / 2;
-        for (let y = 0; y < halfHeight; ++y) {
-          const topOffset = y * bytesPerRow;
-          const bottomOffset = (CAPTURE_HEIGHT - y - 1) * bytesPerRow;
-          for (let i = 0; i < bytesPerRow; ++i) {
-            const temp = imageData[topOffset + i];
-            imageData[topOffset + i] = imageData[bottomOffset + i];
-            imageData[bottomOffset + i] = temp;
-          }
-        }
-        const imgData = new ImageData(
-          new Uint8ClampedArray(imageData.buffer),
-          CAPTURE_WIDTH,
-          CAPTURE_HEIGHT,
-        );
-        context.putImageData(imgData, 0, 0);
-      }
-      const imageDataUrl = captureCanvas.toDataURL("image/png");
-
-      gl.setRenderTarget(originalRenderTarget);
-      gl.outputColorSpace = originalOutputColorSpace;
-
-      return imageDataUrl;
+      return captureView(gl, mainScene, aiCamera, aiRenderTarget);
     },
     [gl, mainScene, managedEyes],
   );
@@ -195,44 +147,13 @@ export const useAIAgentController = (myId: string) => {
           });
           const currentAIState = managedEyes[agentId];
           if (currentAIState) {
-            const currentPosition = currentAIState.position.clone();
-            const currentLookAt = currentAIState.lookAt.clone();
-            let newPosition = currentPosition.clone();
-            const newLookAt = currentLookAt.clone();
-
-            const forwardVector = new Vector3();
-            forwardVector
-              .subVectors(currentLookAt, currentPosition)
-              .normalize();
-
-            if (movementAction.type === "move") {
-              const actualMoveDirection = forwardVector.clone();
-              if (movementAction.direction === "backward") {
-                actualMoveDirection.negate();
-              }
-              const displacement = actualMoveDirection.multiplyScalar(
-                movementAction.distance * MOVEMENT_DISTANCE_MULTIPLIER,
+            const { position: newPosition, lookAt: newLookAt } =
+              applyAgentAction(
+                currentAIState.position,
+                currentAIState.lookAt,
+                movementAction,
+                MOVEMENT_DISTANCE_MULTIPLIER,
               );
-
-              newPosition.copy(currentPosition).add(displacement);
-              newLookAt.copy(currentLookAt).add(displacement);
-
-              newPosition.y = EYE_Y_POSITION;
-            } else if (movementAction.type === "turn") {
-              const angleRad = (movementAction.degrees * Math.PI) / 180;
-              const axis = new Vector3(0, 1, 0);
-              const directionToLookAt = new Vector3().subVectors(
-                currentLookAt,
-                currentPosition,
-              );
-              if (movementAction.direction === "left") {
-                directionToLookAt.applyAxisAngle(axis, angleRad);
-              } else if (movementAction.direction === "right") {
-                directionToLookAt.applyAxisAngle(axis, -angleRad);
-              }
-              newLookAt.addVectors(currentPosition, directionToLookAt);
-              newPosition = currentPosition;
-            }
 
             updateAIAgentTarget(agentId, newPosition, newLookAt);
 

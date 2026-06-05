@@ -31,7 +31,9 @@ export const getGoogleAIClient = async (): Promise<GoogleGenAI> => {
   return genAIClient;
 };
 
-// Config for the active text-generation model.
+// Config for the active text-generation model. These getters stay async because
+// this is a "use server" module — every exported function is a Server Action and
+// must be async (Next rejects a sync export at build time).
 const getActiveTextModel = async () => {
   return {
     provider: "google",

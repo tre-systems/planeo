@@ -189,14 +189,12 @@ export class EventHub extends DurableObject<Env> {
           { status: 400 },
         );
       }
-      if (validated.data.p || validated.data.l) {
-        this.setEye(
-          validated.data.id,
-          validated.data.p,
-          validated.data.l,
-          validated.data.name,
-        );
-      }
+      this.setEye(
+        validated.data.id,
+        validated.data.p,
+        validated.data.l,
+        validated.data.name,
+      );
     } else if (event.type === "chatMessage") {
       this.broadcast(event);
     } else if (event.type === "boxUpdate") {
@@ -207,9 +205,7 @@ export class EventHub extends DurableObject<Env> {
           { status: 400 },
         );
       }
-      if (validated.data.p || validated.data.o) {
-        this.setBox(validated.data.id, validated.data.p, validated.data.o);
-      }
+      this.setBox(validated.data.id, validated.data.p, validated.data.o);
     }
 
     return Response.json({ ok: true });

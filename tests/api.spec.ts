@@ -2,6 +2,16 @@ import { test, expect } from "@playwright/test";
 
 const API_ENDPOINT = "/api/events";
 
+// The SSE test stashes state on `window` for Playwright to read back across
+// page.evaluate / waitForFunction boundaries. This alias names that augmented
+// shape once instead of repeating the intersection cast at every access. It is
+// compile-time only, so referencing it inside browser-context callbacks is fine.
+type TestWindow = Window &
+  typeof globalThis & {
+    sseReceivedData?: string[];
+    eventSource?: EventSource;
+  };
+
 test.describe("API Robustness - POST /api/events", () => {
   test("should return 400 for empty payload", async ({ request }) => {
     const response = await request.post(API_ENDPOINT, { data: {} });
@@ -193,14 +203,9 @@ test.describe("API Robustness - GET /api/events SSE", () => {
       eventSource.onmessage = (event) => {
         console.log(`SSE event:${event.data}`);
         // Store received data on window for Playwright to access
-        (
-          window as Window & typeof globalThis & { sseReceivedData: string[] }
-        ).sseReceivedData =
-          (window as Window & typeof globalThis & { sseReceivedData: string[] })
-            .sseReceivedData || [];
-        (
-          window as Window & typeof globalThis & { sseReceivedData: string[] }
-        ).sseReceivedData.push(event.data);
+        (window as TestWindow).sseReceivedData =
+          (window as TestWindow).sseReceivedData || [];
+        (window as TestWindow).sseReceivedData!.push(event.data);
       };
       eventSource.onerror = (err) => {
         console.error("SSE error:", err);
@@ -209,9 +214,7 @@ test.describe("API Robustness - GET /api/events SSE", () => {
       // Keep the connection open for a short while to allow events to be received
       // In a real app, this would be managed differently.
       // Store eventSource on window to close it later if needed
-      (
-        window as Window & typeof globalThis & { eventSource: EventSource }
-      ).eventSource = eventSource;
+      (window as TestWindow).eventSource = eventSource;
     }, API_ENDPOINT);
 
     // Wait a moment for the connection to be established
@@ -235,11 +238,7 @@ test.describe("API Robustness - GET /api/events SSE", () => {
     await page
       .waitForFunction(
         (expectedEventId) => {
-          const receivedEvents =
-            (
-              window as Window &
-                typeof globalThis & { sseReceivedData: string[] }
-            ).sseReceivedData || [];
+          const receivedEvents = (window as TestWindow).sseReceivedData || [];
           return receivedEvents.some((eventString) => {
             try {
               const eventData = JSON.parse(eventString);
@@ -268,9 +267,7 @@ test.describe("API Robustness - GET /api/events SSE", () => {
 
     // Clean up: Close the SSE connection
     await page.evaluate(() => {
-      (
-        window as Window & typeof globalThis & { eventSource: EventSource }
-      )?.eventSource?.close();
+      (window as TestWindow)?.eventSource?.close();
     });
   });
 });

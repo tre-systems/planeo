@@ -34,8 +34,7 @@ export type ValidatedBoxUpdatePayloadType = z.infer<
   typeof ValidatedBoxUpdatePayloadSchema
 >;
 
-// The box state broadcast to clients over SSE.
-export const BoxEventSchema = BoxSchema.extend({
-  type: z.literal("box"),
-});
+// The box state broadcast to clients over SSE. Identical to BoxSchema; kept as a
+// named alias so SSE-event call sites can reference the wire shape explicitly.
+export const BoxEventSchema = BoxSchema;
 export type BoxEventType = z.infer<typeof BoxEventSchema>;

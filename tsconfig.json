@@ -21,7 +21,7 @@
     "noPropertyAccessFromIndexSignature": true,
     "noUncheckedIndexedAccess": false,
     "jsx": "preserve",
-    "types": ["@playwright/test", "node"],
+    "types": ["node"],
     "plugins": [
       {
         "name": "next"

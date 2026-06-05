@@ -144,14 +144,12 @@ export const useEyesStore = create<EyesState & EyesActions>()(
 
     updateEyeAnimations: (delta) =>
       set((state) => {
-        let changed = false;
         for (const id in state.managedEyes) {
           const eye = state.managedEyes[id];
 
           if (!eye.position.equals(eye.targetPosition)) {
             eye.position.lerp(eye.targetPosition, 0.05);
             eye.position.y = EYE_Y_POSITION;
-            changed = true;
           }
 
           // Gaze at the conversational partner's centre, or drop a partner that
@@ -167,7 +165,6 @@ export const useEyesStore = create<EyesState & EyesActions>()(
 
           if (!eye.lookAt.equals(eye.targetLookAt)) {
             eye.lookAt.lerp(eye.targetLookAt, 0.05);
-            changed = true;
           }
 
           if (eye.status === "appearing") {
@@ -181,7 +178,6 @@ export const useEyesStore = create<EyesState & EyesActions>()(
               eye.scale = TARGET_SCALE;
               eye.status = "visible";
             }
-            changed = true;
           } else if (eye.status === "disappearing") {
             eye.opacity -= delta / FADE_DURATION;
             eye.scale =
@@ -190,14 +186,9 @@ export const useEyesStore = create<EyesState & EyesActions>()(
 
             if (eye.opacity <= 0) {
               delete state.managedEyes[id];
-              changed = true;
               continue;
             }
-            changed = true;
           }
-        }
-        if (!changed) {
-          return;
         }
       }),
 
@@ -205,12 +196,6 @@ export const useEyesStore = create<EyesState & EyesActions>()(
       set((state) => {
         const eye = state.managedEyes[agentId];
         if (eye) {
-          if (!eye.targetPosition || !(eye.targetPosition instanceof Vector3)) {
-            eye.targetPosition = new Vector3();
-          }
-          if (!eye.targetLookAt || !(eye.targetLookAt instanceof Vector3)) {
-            eye.targetLookAt = new Vector3();
-          }
           eye.targetPosition.copy(targetPosition);
           eye.targetLookAt.copy(targetLookAt);
           eye.conversationalTargetId = undefined;

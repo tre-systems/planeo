@@ -103,8 +103,7 @@ export const Eyes = () => {
       if (eyeData.material.uniforms["uOpacity"].value !== eyeData.opacity) {
         eyeData.material.uniforms["uOpacity"].value = eyeData.opacity;
       }
-      // eyeData.scale is intentionally not applied: a kinematic RigidBody has no
-      // scale, so the fade-in scale would have to live on a mesh child instead.
+      // The fade-in scale is applied to a mesh child inside Eye.
     }
   });
 

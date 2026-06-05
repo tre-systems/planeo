@@ -11,6 +11,7 @@ import {
 
 import { requestAiDecision } from "@/app/actions/aiControllerActions";
 import { getAIAgents } from "@/domain/aiAgent";
+import { ValidatedEyeUpdatePayloadSchema } from "@/domain/event";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
 import { log } from "@/lib/log";
 import { roundArray } from "@/lib/utils";
@@ -38,7 +39,7 @@ export const useAIAgentController = (myId: string) => {
   // decisions, and broadcasts movement). Everyone else just watches the agents
   // move via the eyeUpdate events the host posts to the DO.
   const isHost = useEventStore((s) => s.hostId) === myId;
-  const getMessages = useCommunicationStore((s) => s.messages);
+  const messages = useCommunicationStore((s) => s.messages);
   const managedEyes = useEyesStore((s) => s.managedEyes);
   const updateAIAgentTarget = useEyesStore((s) => s.updateAIAgentTarget);
   const setAIAgentView = useAIVisionStore((s) => s.setAIAgentView);
@@ -175,7 +176,7 @@ export const useAIAgentController = (myId: string) => {
           return;
         }
 
-        const chatHistory = getMessages.slice(-10);
+        const chatHistory = messages.slice(-10);
 
         log.debug("ai.controller", "Requesting decision", {
           agentId,
@@ -251,16 +252,27 @@ export const useAIAgentController = (myId: string) => {
               t: Date.now(),
             };
 
-            if (navigator.sendBeacon) {
+            const parsedPayload =
+              ValidatedEyeUpdatePayloadSchema.safeParse(eyeUpdatePayload);
+            if (!parsedPayload.success) {
+              log.error(
+                "ai.controller",
+                "Invalid eyeUpdate payload before sending",
+                {
+                  agentId,
+                  details: parsedPayload.error.flatten(),
+                },
+              );
+            } else if (navigator.sendBeacon) {
               navigator.sendBeacon(
                 "/api/events",
-                JSON.stringify(eyeUpdatePayload),
+                JSON.stringify(parsedPayload.data),
               );
             } else {
               fetch("/api/events", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(eyeUpdatePayload),
+                body: JSON.stringify(parsedPayload.data),
                 keepalive: true,
               }).catch((err) =>
                 log.error("ai.controller", "Fallback eyeUpdate fetch failed", {
@@ -283,7 +295,7 @@ export const useAIAgentController = (myId: string) => {
     },
     [
       extractImageDataFromRenderer,
-      getMessages,
+      messages,
       managedEyes,
       updateAIAgentTarget,
       // requestAiDecision is a server action, typically stable

@@ -36,8 +36,6 @@ const getActiveTextModel = async () => {
   return {
     provider: "google",
     name: "gemini-2.0-flash-lite",
-    displayName: "Gemini 2.0 Flash-Lite",
-    maxTokens: 500,
   };
 };
 
@@ -46,8 +44,6 @@ export const getActiveVisionModel = async () => {
   return {
     provider: "google",
     name: "gemini-1.5-flash-latest",
-    displayName: "Gemini 1.5 Flash",
-    maxTokens: 500,
   };
 };
 

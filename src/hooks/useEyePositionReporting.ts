@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import { Vector3 } from "three";
 
+import { ValidatedEyeUpdatePayloadSchema } from "@/domain/event";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
+import { log } from "@/lib/log";
 import { roundVec3, areVec3sEqual } from "@/lib/utils";
 
 import type { EyeUpdateType } from "@/domain";
@@ -66,10 +68,18 @@ export const useEyePositionReporting = (
       l: initialLookAtRounded,
       t: Date.now(),
     };
-    navigator.sendBeacon?.("/api/events", JSON.stringify(initialPayload));
-    lastSentPositionRef.current = initialPositionRounded;
-    lastSentLookAtRef.current = initialLookAtRounded;
-    forcePositionUpdateCounterRef.current = 0;
+    const parsedInitial =
+      ValidatedEyeUpdatePayloadSchema.safeParse(initialPayload);
+    if (!parsedInitial.success) {
+      log.error("sse", "Invalid eye update payload before sending", {
+        details: parsedInitial.error.flatten(),
+      });
+    } else {
+      navigator.sendBeacon?.("/api/events", JSON.stringify(parsedInitial.data));
+      lastSentPositionRef.current = initialPositionRounded;
+      lastSentLookAtRef.current = initialLookAtRounded;
+      forcePositionUpdateCounterRef.current = 0;
+    }
 
     const intervalId = setInterval(() => {
       const currentPositionRaw: [number, number, number] = [
@@ -134,7 +144,14 @@ export const useEyePositionReporting = (
         }
 
         if (payload.p || payload.l) {
-          navigator.sendBeacon?.("/api/events", JSON.stringify(payload));
+          const parsed = ValidatedEyeUpdatePayloadSchema.safeParse(payload);
+          if (!parsed.success) {
+            log.error("sse", "Invalid eye update payload before sending", {
+              details: parsed.error.flatten(),
+            });
+          } else {
+            navigator.sendBeacon?.("/api/events", JSON.stringify(parsed.data));
+          }
         }
 
         if (isTimeForForcePositionUpdate) {

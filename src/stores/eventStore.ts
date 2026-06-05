@@ -24,6 +24,39 @@ type EyeUpdateEventListener = (event: EyeUpdateType) => void;
 type ChatMessageEventListener = (event: ChatMessageEventType) => void;
 type BoxEventListener = (event: BoxEventType) => void;
 
+// Shared egress for the POST /api/events senders: the box-update and chat
+// senders share an identical fetch → ok-check → catch shape, differing only in
+// the human-readable `kind` woven into log lines and `lastError`. `setLastError`
+// is passed in so the helper can stay outside the store closure.
+const postEvent = async (
+  parsedData: unknown,
+  { kind, setLastError }: { kind: string; setLastError: (msg: string) => void },
+): Promise<void> => {
+  try {
+    const response = await fetch("/api/events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(parsedData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      log.error("sse", `Failed to send ${kind} to server`, {
+        status: response.status,
+        body: errorData,
+      });
+      setLastError(`Server error sending ${kind}: ${response.status}`);
+    }
+  } catch (error) {
+    log.error("sse", `Network error sending ${kind}`, {
+      error: String(error),
+    });
+    setLastError(`Network error sending ${kind}`);
+  }
+};
+
 interface EventStoreState {
   isConnected: boolean;
   lastError: string | null;
@@ -80,31 +113,10 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
           return;
         }
 
-        try {
-          const response = await fetch("/api/events", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(parsedPayload.data),
-          });
-
-          if (!response.ok) {
-            const errorData = await response.text();
-            log.error("sse", "Failed to send box update to server", {
-              status: response.status,
-              body: errorData,
-            });
-            set({
-              lastError: `Server error sending box update: ${response.status}`,
-            });
-          }
-        } catch (error) {
-          log.error("sse", "Network error sending box update", {
-            error: String(error),
-          });
-          set({ lastError: "Network error sending box update" });
-        }
+        await postEvent(parsedPayload.data, {
+          kind: "box update",
+          setLastError: (lastError) => set({ lastError }),
+        });
       },
       300,
     ),
@@ -214,31 +226,10 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
         return;
       }
 
-      try {
-        const response = await fetch("/api/events", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(parsedPayload.data),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.text();
-          log.error("sse", "Failed to send chat message to server", {
-            status: response.status,
-            body: errorData,
-          });
-          set({
-            lastError: `Server error sending chat message: ${response.status}`,
-          });
-        }
-      } catch (error) {
-        log.error("sse", "Network error sending chat message", {
-          error: String(error),
-        });
-        set({ lastError: "Network error sending chat message" });
-      }
+      await postEvent(parsedPayload.data, {
+        kind: "chat message",
+        setLastError: (lastError) => set({ lastError }),
+      });
     },
 
     _handleMessage: (event: MessageEvent) => {

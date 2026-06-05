@@ -24,10 +24,15 @@ export const Eye = ({ eye, rigidBodyRef }: EyeProps) => {
       position={eye.position}
     >
       <BallCollider args={[EYE_RADIUS]} />
-      <mesh rotation={[0, Math.PI, 0]}>
-        <sphereGeometry args={[EYE_RADIUS, 32, 32]} />
-        <primitive object={eye.material} attach="material" />
-      </mesh>
+      {/* The fade-in scale lives on the visual mesh, not the kinematic
+          RigidBody (which has no scale) or the collider (scaling it would
+          change physics). It animates INITIAL_SCALE -> 1 and settles at 1. */}
+      <group scale={eye.scale}>
+        <mesh rotation={[0, Math.PI, 0]}>
+          <sphereGeometry args={[EYE_RADIUS, 32, 32]} />
+          <primitive object={eye.material} attach="material" />
+        </mesh>
+      </group>
       {eye.name && (
         <Billboard position={[0, EYE_RADIUS * 1.5, 0]}>
           <Text fontSize={1.5} color="white" anchorX="center" anchorY="middle">

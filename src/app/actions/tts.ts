@@ -68,7 +68,7 @@ const performSynthesis = async (
   text: string,
   voiceName: string,
   languageCode: string,
-): Promise<{ audioBase64?: string; error?: string }> => {
+): Promise<SynthesizeSpeechResult> => {
   try {
     const audioContent = await retry(
       async () => {

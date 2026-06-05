@@ -1,75 +1,98 @@
 # Backlog
 
-Known limitations, deliberate gaps, and forward-looking work. This is the place
-to look before "fixing" something that is already a tracked, intentional quirk.
+Outstanding work and intentional gaps. Check here before "fixing" something that
+is already a tracked, deliberate quirk. The patterns the code follows are in
+[`ARCHITECTURE.md`](../ARCHITECTURE.md#patterns).
 
-## Known limitations / deliberate gaps
+## Deliberate gaps (intentional — context, not bugs)
 
-- **One shared world, by design.** All real-time state (eyes, boxes,
-  subscribers) lives in a single `EventHub` Durable Object
-  ([`src/server/eventHub.ts`](../src/server/eventHub.ts)), resolved by
-  `idFromName("global")`. This is intentional: the DO is the shared-state
-  authority, so no Redis or external store is needed. State is in-memory and
-  ephemeral — it lives only while the DO is active and is not persisted. To
-  support multiple independent worlds, shard by DO name (one instance per world)
-  rather than introducing a separate backing store.
-- **One simulation host, best-effort handoff.** The DO elects the oldest
-  connected client as the host that drives the AI agents and the cube physics
-  (broadcast as a `host` event). If the host disconnects the next-oldest takes
-  over from the last broadcast state — but there's a sub-second gap with no host
-  (the sim briefly freezes), and in-flight physics velocities aren't migrated, so
-  boxes resume from their last broadcast pose at rest. Acceptable here; a true
-  handoff would snapshot velocities into the `host` event.
+- **One shared world, by design.** All real-time state (eyes, boxes, subscribers)
+  lives in a single `EventHub` Durable Object resolved by `idFromName("global")` —
+  in-memory and ephemeral, no external store needed. For multiple worlds, shard by
+  DO name rather than adding a backing store.
 - **Agent POV thumbnails are host-only.** Only the host renders each agent's
-  offscreen view, so the `AIAgentViews` HUD thumbnails stay blank on viewer
-  clients (the agents still move and chat for everyone). Rendering them on every
-  client is exactly the redundant per-frame work the host model removes.
-- **Only the first agent replies to text chat.** `useAiChat` always routes
-  human chat to `agents[0]`; other agents never answer typed messages (they
-  still act and speak via the vision loop).
-- **`next dev` serves the UI only.** The real-time hub (`/api/events` + the
-  `EventHub` DO) is wired in `worker.ts` and only runs under the Workers runtime.
-  Use `npm run preview` to exercise real-time locally.
-- **Auto-deploy paused.** CI deploys to Cloudflare Workers on push to `main`
-  only when the `DEPLOY_ENABLED` repo variable is `true`; it is currently unset,
-  so the app is not deployed. The `planeo.tre.systems` custom domain is already
-  configured in `wrangler.jsonc` (`routes`) and takes effect once deploy is
-  re-enabled.
-- **PWA dropped.** `next-pwa` is removed, so there is no service worker /
-  offline support (the `manifest.json` link in `layout.tsx` remains). It could
-  be re-added with a Workers-compatible service worker such as Serwist.
+  offscreen view, so the `AIAgentViews` HUD stays blank on viewer clients — that
+  redundant per-frame work is exactly what the host model removes.
+- **`next dev` serves the UI only.** The real-time hub (`/api/events` + the DO)
+  runs only under the Workers runtime; use `npm run preview` to exercise it.
+- **Auto-deploy paused.** CI deploys only when the `DEPLOY_ENABLED` repo variable
+  is `true` (currently unset). The `planeo.tre.systems` custom domain is already
+  configured in `wrangler.jsonc` and takes effect once deploy is re-enabled.
 
-## Pattern consistency & gaps
+## Outstanding work
 
-The patterns the code follows are documented in
-[`ARCHITECTURE.md`](../ARCHITECTURE.md#patterns). Known places the code does not
-yet follow them cleanly, deliberately left for now:
+Prioritised, P1 (highest value) → P3. None are known bugs in shipped behavior.
 
-- **Single top-level animation-tick loop.** Three `useFrame` updaters
-  (`boxStore`, `eyesStore`, `useAIAgentController`) still run independently.
-  Centralizing them would unify frame-rate handling, but it's a refactor of
-  working render code with no concrete bug, so it's left for now.
-- **Wire-format version field on `EventSchema`.** There's no version discriminant
-  on events, so a long-lived Durable Object can't detect contract drift across
-  client versions during a rollout. Add one when the wire format next changes.
-- **Eye-update egress isn't validated.** Box and chat egress run through
-  `safeParse` before sending; eye updates (hot path, every 100 ms) do not — low
-  value, since the client constructs them itself, but it's the one asymmetry left.
-- **Broader `useShallow`.** Only `ChatToggleButton` was converted; the
-  frame-driven container selectors (`Eyes`, `Box`, `useAIAgentController`) still
-  subscribe to whole records, though the over-render is masked by the frame loop.
-- **`useAIAgentController`'s `getMessages`** is a value, not a getter — a
-  misleading name worth renaming.
+### P1 — correctness & robustness
 
-## Forward-looking work
+- **Resolve the dead eye fade-in scale.** `eyesStore` animates an `eye.scale`
+  (`INITIAL_SCALE → TARGET_SCALE`) that nothing renders — `Eyes.tsx` can't scale a
+  kinematic `RigidBody`. Either apply it to a mesh child or delete the dead state.
+- **Durable Object unit tests.** `eventHub` host election, the `setEye`/`setBox`
+  merges, and `purgeStale` have no unit coverage; add
+  `@cloudflare/vitest-pool-workers`.
+- **Wire-format version field on `EventSchema`.** No version discriminant, so a
+  long-lived DO can't detect client contract drift during a rollout.
+- **Seamless host handoff.** On host change the sim freezes briefly and cube
+  velocities aren't migrated (boxes resume at rest); snapshot velocity into the
+  `host` event for a clean handoff.
 
-- **Speech UI polish** — the Chirp3 TTS path works, but there are no per-message
+### P2 — maintainability & consistency
+
+- **Single top-level animation-tick loop.** Three `useFrame` updaters (`boxStore`,
+  `eyesStore`, `useAIAgentController`) run independently; one tick would unify
+  frame-rate handling.
+- **Break up the large files.** `useAIAgentController` (318 lines), `eventHub`
+  (310), and `eventStore` (289) each mix several concerns — e.g. the agent's
+  vision capture vs. decision loop, or the DO's SSE plumbing vs. state mutations.
+- **DRY the event-store senders.** `throttledSendBoxUpdate` and `sendChatMessage`
+  duplicate the POST + `safeParse` + error-handling block; extract one helper.
+- **Broader `useShallow`.** Only `ChatToggleButton` uses it; the frame-driven
+  container selectors (`Eyes`, `Box`, `useAIAgentController`) still read whole
+  records (the over-render is masked by the frame loop).
+- **Validate eye-update egress.** Box and chat egress `safeParse` before sending;
+  the eye-update hot path does not — the one asymmetry left.
+- **Rename `useAIAgentController`'s `getMessages`** — it is a value, not a getter.
+
+### P3 — minor cleanups (opportunistic; do when next in the file)
+
+- `sceneConstants`: collapse the duplicate `GRID_Y_POSITION` / `GROUND_Y_POSITION`
+  (both `-20`).
+- `utils`: consolidate `roundVec3` / `roundArray` (identical rounding logic).
+- `googleAI`: make `getActiveTextModel` / `getActiveVisionModel` sync (they return
+  static literals) and drop the unread `displayName` / `maxTokens` fields.
+- `eyesStore`: remove the inert `changed` bookkeeping in `updateEyeAnimations` and
+  the unreachable `Vector3` re-init guards in `updateAIAgentTarget`.
+- `eventHub`: drop the redundant `p || l` / `p || o` guards in `handlePost` — the
+  `.refine()`d schemas already enforce them.
+- `box.ts`: drop the no-op `BoxEventSchema.extend({ type })` (identical to
+  `BoxSchema`).
+- `tts.ts`: reuse the exported `SynthesizeSpeechResult` type for `performSynthesis`'s
+  inline return.
+- `tests/api.spec.ts`: factor out the repeated `window as …` intersection cast.
+- `tsconfig`: scope `@playwright/test` types to the test files instead of globally.
+- Delete the stale local `debug_images/` directory and its `.gitignore` /
+  `.prettierignore` entries (no code writes it anymore).
+
+### Product / features
+
+- **Multi-agent text chat.** `useAiChat` routes human chat only to `agents[0]`;
+  let other agents answer typed messages too (they already act and speak via the
+  vision loop).
+- **Richer agent behavior.** Memory across decisions, agent-to-agent dialogue, and
+  actions beyond `move` / `turn`.
+- **User-to-user chat.** Humans currently only see AI messages.
+- **Persistent profiles.** Identities are ephemeral `nanoid` ids today.
+- **Speech UI polish.** The Chirp3 TTS path works; there are no per-message
   playback/status indicators in the chat UI.
-- **User-to-user chat** — humans can currently only see AI messages.
-- **More agent behavior** — memory across decisions, agent-to-agent dialogue,
-  and richer actions beyond `move`/`turn`.
-- **More tests** — vitest covers the `src/domain/` schemas and `src/lib/retry`;
-  the `EventHub` DO logic is the highest-value gap (it needs the Workers test
-  pool to exercise). The Playwright e2e suite runs locally via `npm run check`,
-  not yet in CI.
-- **Persistent profiles** — identities are ephemeral `nanoid` ids today.
+- **SSE → WebSocket + DO hibernation.** A bidirectional transport with hibernation
+  would cut idle cost and simplify egress; a bigger change — evaluate when needed.
+- **Re-add PWA.** `next-pwa` was removed (no service worker today); a
+  Workers-compatible SW such as Serwist could restore offline/installable support.
+
+### Ops / hygiene
+
+- **Triage `npm audit`** (19 findings: 1 low / 9 moderate / 9 high) — likely mostly
+  transitive/dev; resolve the real ones.
+- **Run the Playwright e2e in CI** as a non-gating job (it runs locally via
+  `npm run check`).

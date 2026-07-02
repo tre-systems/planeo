@@ -56,13 +56,13 @@ digraph PlaneoAIAgentLoop {
       labelloc=t, labeljust=l,
       color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=18
     ];
-    visual [label=<<B>Visual update — every 100 ms</B><BR/><FONT POINT-SIZE="15">offscreen render 320×200</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    visual [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Visual update — every 100 ms</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">offscreen render 320×200</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
     hud [label=<<B>aiVisionStore → AIAgentViews HUD</B>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    tick [label=<<B>Decision — every ~5 s</B><BR/><FONT POINT-SIZE="15">guarded by a per-agent in-flight lock</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    decide [label=<<B>requestAiDecision</B><BR/><FONT POINT-SIZE="15">agentId · image · last 10 messages</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    apply [label=<<B>Apply action</B><BR/><FONT POINT-SIZE="15">move = forward × 10 · turn = degrees</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    tick [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Decision — every ~5 s</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">guarded by a per-agent in-flight lock</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    decide [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>requestAiDecision</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">agentId · image · last 10 messages</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    apply [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Apply action</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">move = forward × 10 · turn = degrees</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
     target [label=<<B>eyesStore.updateAIAgentTarget</B>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    reportback [label=<<B>eyeUpdate → sendBeacon</B><BR/><FONT POINT-SIZE="15">new position to the hub</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    reportback [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>eyeUpdate → sendBeacon</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">new position to the hub</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
     visual -> hud [style=invis];
     tick -> visual [style=invis];
   }
@@ -78,22 +78,22 @@ digraph PlaneoAIAgentLoop {
       labelloc=t, labeljust=l,
       color="#b8e5c8", fillcolor="#f4fbf6", style="rounded,filled", penwidth=1.8, margin=18
     ];
-    prompt [label=<<B>Build prompt</B><BR/><FONT POINT-SIZE="15">persona + image + chat history</FONT>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
-    valid [label=<<B>Valid JSON?</B><BR/><FONT POINT-SIZE="15">AIResponseSchema</FONT>>, shape=diamond, style=filled, width=3.0, height=1.1, fillcolor="#ffffff", color="#1f2f46"];
-    broadcast [label=<<B>Broadcast chat</B><BR/><FONT POINT-SIZE="15">EVENT_HUB binding</FONT>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
+    prompt [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Build prompt</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">persona + image + chat history</FONT></TD></TR></TABLE>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
+    valid [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Valid JSON?</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">AIResponseSchema</FONT></TD></TR></TABLE>>, shape=diamond, style=filled, width=3.0, height=1.1, fillcolor="#ffffff", color="#1f2f46"];
+    broadcast [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Broadcast chat</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">EVENT_HUB binding</FONT></TD></TR></TABLE>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
     none [label=<<B>action = { none }</B>>, color="#c53030", fillcolor="#fdeaea:#ffffff"];
     prompt -> valid;
   }
 
-  gemini [label=<<B>Google Gemini</B><BR/><FONT POINT-SIZE="15">vision · retry/backoff</FONT>>, color="#2264c7", fillcolor="#eaf3ff:#ffffff"];
+  gemini [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Google Gemini</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">vision · retry/backoff</FONT></TD></TR></TABLE>>, color="#2264c7", fillcolor="#eaf3ff:#ffffff"];
 
   tick -> decide;
-  decide -> prompt [label="server action", lhead=cluster_server, ltail=cluster_client];
-  prompt -> gemini [label="generateContent"];
+  decide -> prompt [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">server action</FONT></TD></TR></TABLE>>, lhead=cluster_server, ltail=cluster_client];
+  prompt -> gemini [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">generateContent</FONT></TD></TR></TABLE>>];
   gemini -> valid [style=dashed, color="#6b7280", fontcolor="#6b7280"];
-  valid -> broadcast [label="yes — has chatMessage"];
-  valid -> apply [label="return action", lhead=cluster_client, ltail=cluster_server];
-  valid -> none [label="no / error", color="#c53030", fontcolor="#c53030"];
-  none -> apply [label="return", color="#c53030", fontcolor="#c53030", lhead=cluster_client, ltail=cluster_server];
+  valid -> broadcast [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">yes — has chatMessage</FONT></TD></TR></TABLE>>];
+  valid -> apply [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">return action</FONT></TD></TR></TABLE>>, lhead=cluster_client, ltail=cluster_server];
+  valid -> none [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">no / error</FONT></TD></TR></TABLE>>, color="#c53030", fontcolor="#c53030"];
+  none -> apply [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">return</FONT></TD></TR></TABLE>>, color="#c53030", fontcolor="#c53030", lhead=cluster_client, ltail=cluster_server];
   apply -> target -> reportback;
 }

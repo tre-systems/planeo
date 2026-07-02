@@ -57,8 +57,8 @@ digraph PlaneoRealtimeDataFlow {
       color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=18
     ];
     cam [label=<<B>Camera move / box drag</B>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    report [label=<<B>useEyePositionReporting</B><BR/><FONT POINT-SIZE="15">poll 100 ms · change-detect</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    beacon [label=<<B>sendBeacon / fetch</B><BR/><FONT POINT-SIZE="15">POST /api/events</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    report [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>useEyePositionReporting</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">poll 100 ms · change-detect</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    beacon [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>sendBeacon / fetch</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">POST /api/events</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
     cam -> report -> beacon;
   }
 
@@ -73,8 +73,8 @@ digraph PlaneoRealtimeDataFlow {
       labelloc=t, labeljust=l,
       color="#99d5cf", fillcolor="#f0fdfa", style="rounded,filled", penwidth=1.8, margin=18
     ];
-    setstate [label=<<B>setEye / setBox</B><BR/><FONT POINT-SIZE="15">EventSchema validate · merge</FONT>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
-    bcast [label=<<B>broadcast</B><BR/><FONT POINT-SIZE="15">data: &lt;json&gt; to all subscribers + replay on connect</FONT>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
+    setstate [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>setEye / setBox</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">EventSchema validate · merge</FONT></TD></TR></TABLE>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
+    bcast [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>broadcast</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">data: &lt;json&gt; to all subscribers + replay on connect</FONT></TD></TR></TABLE>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
     setstate -> bcast;
   }
 
@@ -89,29 +89,29 @@ digraph PlaneoRealtimeDataFlow {
       labelloc=t, labeljust=l,
       color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=18
     ];
-    es [label=<<B>EventSource</B><BR/><FONT POINT-SIZE="15">GET /api/events</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    handle [label=<<B>eventStore._handleMessage</B><BR/><FONT POINT-SIZE="15">safeParse · fan out by type</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    es [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>EventSource</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">GET /api/events</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    handle [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>eventStore._handleMessage</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">safeParse · fan out by type</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
 
-    raw [label=<<B>rawEyeEventStore</B><BR/><FONT POINT-SIZE="15">raw { p, l, t } off the wire</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    sync [label=<<B>useEyesDataSynchronizer</B><BR/><FONT POINT-SIZE="15">raw record → animated targets</FONT>>, color="#7c3aed", fillcolor="#f5f3ff:#ffffff"];
-    eyesAnim [label=<<B>eyesStore</B><BR/><FONT POINT-SIZE="15">Vector3 lerp · opacity fade</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    raw [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>rawEyeEventStore</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">raw { p, l, t } off the wire</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    sync [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>useEyesDataSynchronizer</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">raw record → animated targets</FONT></TD></TR></TABLE>>, color="#7c3aed", fillcolor="#f5f3ff:#ffffff"];
+    eyesAnim [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>eyesStore</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">Vector3 lerp · opacity fade</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
     eyesRender [label=<<B>Eyes (R3F render)</B>>, color="#15803d", fillcolor="#d8f5de:#effcf2", penwidth=3.0];
 
     chat [label=<<B>communicationStore</B>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
     chatUI [label=<<B>ChatWindow (render)</B>>, color="#15803d", fillcolor="#d8f5de:#effcf2", penwidth=3.0];
 
-    boxAnim [label=<<B>boxStore</B><BR/><FONT POINT-SIZE="15">current → target lerp</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    boxAnim [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>boxStore</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">current → target lerp</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
     boxRender [label=<<B>ServerDrivenBoxes (render)</B>>, color="#15803d", fillcolor="#d8f5de:#effcf2", penwidth=3.0];
 
     es -> handle;
-    handle -> raw [label="eyeUpdate"];
-    handle -> chat [label="chatMessage"];
-    handle -> boxAnim [label="box"];
+    handle -> raw [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">eyeUpdate</FONT></TD></TR></TABLE>>];
+    handle -> chat [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">chatMessage</FONT></TD></TR></TABLE>>];
+    handle -> boxAnim [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">box</FONT></TD></TR></TABLE>>];
     raw -> sync -> eyesAnim -> eyesRender;
     chat -> chatUI;
     boxAnim -> boxRender;
   }
 
-  beacon -> setstate [label="POST event", lhead=cluster_hub, ltail=cluster_out];
-  bcast -> es [label="SSE (text/event-stream)", lhead=cluster_in, ltail=cluster_hub];
+  beacon -> setstate [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">POST event</FONT></TD></TR></TABLE>>, lhead=cluster_hub, ltail=cluster_out];
+  bcast -> es [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">SSE (text/event-stream)</FONT></TD></TR></TABLE>>, lhead=cluster_in, ltail=cluster_hub];
 }

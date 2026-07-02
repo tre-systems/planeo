@@ -56,10 +56,10 @@ digraph PlaneoSystemOverview {
       labelloc=t, labeljust=l,
       color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=20
     ];
-    scene [label=<<B>React Three Fiber scene</B><BR/><FONT POINT-SIZE="15">Scene · Eyes · Boxes · AIAgentViews HUD</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    hooks [label=<<B>Hooks</B><BR/><FONT POINT-SIZE="15">useEventSource · useEyePositionReporting<BR/>useAIAgentController · useAiChat</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    stores [label=<<B>Zustand stores</B><BR/><FONT POINT-SIZE="15">event · rawEye · eyes · box · chat · aiVision</FONT>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    transport [label=<<B>Transport</B><BR/><FONT POINT-SIZE="15">EventSource (SSE in) · sendBeacon / fetch (out)</FONT>>];
+    scene [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>React Three Fiber scene</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">Scene · Eyes · Boxes · AIAgentViews HUD</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    hooks [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Hooks</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">useEventSource · useEyePositionReporting<BR/>useAIAgentController · useAiChat</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    stores [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Zustand stores</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">event · rawEye · eyes · box · chat · aiVision</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
+    transport [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Transport</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">EventSource (SSE in) · sendBeacon / fetch (out)</FONT></TD></TR></TABLE>>];
     scene -> hooks [style=invis];
     hooks -> stores [style=invis];
     stores -> transport [style=invis];
@@ -77,7 +77,7 @@ digraph PlaneoSystemOverview {
       color="#cdd5e0", fillcolor="#f7f9fc", style="rounded,filled", penwidth=1.8, margin=22
     ];
 
-    entry [label=<<B>worker.ts entry</B><BR/><FONT POINT-SIZE="15">routes /api/events to the DO,<BR/>delegates everything else to Next.js</FONT>>, color="#1f2f46", fillcolor="#eef1f6:#ffffff"];
+    entry [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>worker.ts entry</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">routes /api/events to the DO,<BR/>delegates everything else to Next.js</FONT></TD></TR></TABLE>>, color="#1f2f46", fillcolor="#eef1f6:#ffffff"];
 
     subgraph cluster_next {
       graph [
@@ -90,7 +90,7 @@ digraph PlaneoSystemOverview {
         color="#b8e5c8", fillcolor="#f4fbf6", style="rounded,filled", penwidth=1.8, margin=18
       ];
       pages [label=<<B>Pages / RSC + assets</B>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
-      actions [label=<<B>Server actions</B><BR/><FONT POINT-SIZE="15">generateMessage · aiControllerActions · tts</FONT>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
+      actions [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Server actions</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">generateMessage · aiControllerActions · tts</FONT></TD></TR></TABLE>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
     }
 
     subgraph cluster_do {
@@ -104,8 +104,8 @@ digraph PlaneoSystemOverview {
         labelloc=t, labeljust=l,
         color="#99d5cf", fillcolor="#f0fdfa", style="rounded,filled", penwidth=1.8, margin=18
       ];
-      do_state [label=<<B>In-memory state</B><BR/><FONT POINT-SIZE="15">eyes · boxes · subscribers</FONT>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
-      do_sse [label=<<B>SSE broadcast + replay</B><BR/><FONT POINT-SIZE="15">text/event-stream · alarm purges stale eyes</FONT>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
+      do_state [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>In-memory state</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">eyes · boxes · subscribers</FONT></TD></TR></TABLE>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
+      do_sse [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>SSE broadcast + replay</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">text/event-stream · alarm purges stale eyes</FONT></TD></TR></TABLE>>, color="#0f766e", fillcolor="#e6fffb:#ffffff"];
       do_state -> do_sse [style=invis];
     }
   }
@@ -120,16 +120,16 @@ digraph PlaneoSystemOverview {
       labelloc=t, labeljust=l,
       color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=18
     ];
-    gemini [label=<<B>Google Gemini</B><BR/><FONT POINT-SIZE="15">vision (1.5-flash) · text (2.0-flash-lite)</FONT>>];
-    gtts [label=<<B>Google Cloud TTS</B><BR/><FONT POINT-SIZE="15">REST · Chirp3-HD voices</FONT>>];
+    gemini [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Google Gemini</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">vision (1.5-flash) · text (2.0-flash-lite)</FONT></TD></TR></TABLE>>];
+    gtts [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Google Cloud TTS</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">REST · Chirp3-HD voices</FONT></TD></TR></TABLE>>];
   }
 
-  transport -> entry [label="GET /api/events  (SSE)", lhead=cluster_worker];
-  transport -> entry [label="POST eyeUpdate / boxUpdate / chat", style=dashed, color="#6b7280", fontcolor="#6b7280"];
-  entry -> do_state [label="/api/events → stub", lhead=cluster_do];
-  entry -> pages [label="all other requests", lhead=cluster_next];
-  scene -> actions [label="server action (vision/chat)", ltail=cluster_browser, lhead=cluster_next, style=dashed, color="#6b7280", fontcolor="#6b7280"];
-  actions -> gemini [label="generate", ltail=cluster_next, lhead=cluster_external];
-  actions -> do_state [label="broadcast chat (EVENT_HUB binding)", ltail=cluster_next, lhead=cluster_do];
-  actions -> gtts [label="synthesize speech", ltail=cluster_next];
+  transport -> entry [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">GET /api/events  (SSE)</FONT></TD></TR></TABLE>>, lhead=cluster_worker];
+  transport -> entry [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#dfe3e9" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#6b7280">POST eyeUpdate / boxUpdate / chat</FONT></TD></TR></TABLE>>, style=dashed, color="#6b7280", fontcolor="#6b7280"];
+  entry -> do_state [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">/api/events → stub</FONT></TD></TR></TABLE>>, lhead=cluster_do];
+  entry -> pages [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">all other requests</FONT></TD></TR></TABLE>>, lhead=cluster_next];
+  scene -> actions [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#dfe3e9" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#6b7280">server action (vision/chat)</FONT></TD></TR></TABLE>>, ltail=cluster_browser, lhead=cluster_next, style=dashed, color="#6b7280", fontcolor="#6b7280"];
+  actions -> gemini [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">generate</FONT></TD></TR></TABLE>>, ltail=cluster_next, lhead=cluster_external];
+  actions -> do_state [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">broadcast chat (EVENT_HUB binding)</FONT></TD></TR></TABLE>>, ltail=cluster_next, lhead=cluster_do];
+  actions -> gtts [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">synthesize speech</FONT></TD></TR></TABLE>>, ltail=cluster_next];
 }

@@ -65,8 +65,9 @@ Prioritised, P1 (highest value) → P3. None are known bugs in shipped behavior.
 - **Multi-agent text chat.** `useAiChat` routes human chat only to `agents[0]`;
   let other agents answer typed messages too (they already act and speak via the
   vision loop).
-- **Richer agent behavior.** Memory across decisions, agent-to-agent dialogue, and
-  actions beyond `move` / `turn`.
+- **Richer agent behavior.** Longer-term memory (a rolling summary beyond the
+  per-agent last-5-action window each decision already carries), agent-to-agent
+  dialogue, and actions beyond `move` / `turn`.
 - **User-to-user chat.** Humans currently only see AI messages.
 - **Persistent profiles.** Identities are ephemeral `nanoid` ids today.
 - **Speech UI polish.** The Chirp3 TTS path works; there are no per-message

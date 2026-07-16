@@ -327,25 +327,31 @@ the local user) it allocates an offscreen `PerspectiveCamera` and a `320×200`
 `WebGLRenderTarget`. On the host a single `useFrame` drives two cadences:
 
 - **Visual update** every `100 ms` (~10 FPS): render the scene from the agent's
-  eye, read + vertically flip the pixels into a PNG data URL, and push it to
+  eye, read + vertically flip the pixels into a JPEG data URL, and push it to
   `aiVisionStore` for the HUD thumbnail.
 - **Decision** every `~5 s` (the agent-loop rate limiter), guarded by a per-agent
-  in-flight lock: send the latest thumbnail and the last 10 chat messages to the
-  `generateAiActionAndChat` server action, then apply the returned action
-  locally — `move` translates along the forward vector by `distance × 10`;
-  `turn` rotates the look-at about Y by `degrees`. The new position is reported
-  back over SSE. A refusal (`unauthorized`/`rate-limited`) backs the agent off
-  for 60 s instead of retrying on the next cadence tick.
+  in-flight lock: send the latest thumbnail, the last 10 chat messages, and the
+  agent's self state (position, heading, and its last 5 actions — the model's
+  short-term memory) to the `generateAiActionAndChat` server action, then apply
+  the returned action locally — `move` translates along the forward vector by
+  `distance × 10`; `turn` rotates the look-at about Y by `degrees`. The new
+  position is reported back over SSE. A refusal (`unauthorized`/`rate-limited`)
+  backs the agent off for 60 s instead of retrying on the next cadence tick.
 
 [`generateAiActionAndChat`](src/app/actions/generateMessage.ts) is the server
-side: it builds the agent's "newly-awakened, disoriented" persona prompt, calls
-Gemini with `responseMimeType: "application/json"` (`temperature 0.4`,
-`maxOutputTokens 256`), strips code fences, and validates the result against
-`AIResponseSchema` (`{ chatMessage?, action }`). If there's a chat message it
-broadcasts it to the `EventHub` DO via the `EVENT_HUB` binding
-(`getCloudflareContext().env`) and returns the action. Pacing is the host's job:
-the `~5 s` cadence lives in `useAIAgentController`'s frame loop, so the action
-returns as soon as Gemini does.
+side. The static "newly-awakened, disoriented" persona goes in
+`systemInstruction` (byte-identical every call, so the changing parts come
+last — the ordering Gemini's implicit prefix caching wants); the dynamic turn
+(name, pose, recent actions, chat history, then the image) goes in the user
+content. The response is constrained-decoded against a Gemini
+`responseSchema` (`temperature 0.4`, `maxOutputTokens 256`), so fences and
+malformed JSON are impossible; the result is still validated against
+`AIResponseSchema` (`{ chatMessage?, action }`), which also enforces the
+ranges `Schema` cannot express. If there's a chat message it broadcasts it to
+the `EventHub` DO via the `EVENT_HUB` binding (`getCloudflareContext().env`)
+and returns the action. Pacing is the host's job: the `~5 s` cadence lives in
+`useAIAgentController`'s frame loop, so the action returns as soon as Gemini
+does.
 
 ### Text chat replies
 

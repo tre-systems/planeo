@@ -31,9 +31,11 @@ const getScratchPixels = (): Uint8Array => {
 
 // Renders `scene` from `camera` into `renderTarget`, reads back the pixels,
 // flips them vertically (WebGL's origin is bottom-left), draws them to a 2D
-// canvas, and returns a PNG data URL. Restores the renderer's render target
-// and output color space before returning. Uses WebGL/DOM, so it is not unit
-// testable. Returns null if a 2D canvas context is unavailable.
+// canvas, and returns a JPEG data URL (5-10× smaller than PNG for a world
+// render, and Gemini's image-token cost is per-tile so quality loss is free).
+// Restores the renderer's render target and output color space before
+// returning. Uses WebGL/DOM, so it is not unit testable. Returns null if a
+// 2D canvas context is unavailable.
 export const captureView = (
   gl: WebGLRenderer,
   scene: Scene,
@@ -79,7 +81,7 @@ export const captureView = (
     );
     context.putImageData(imgData, 0, 0);
   }
-  const imageDataUrl = captureCanvas.toDataURL("image/png");
+  const imageDataUrl = captureCanvas.toDataURL("image/jpeg", 0.7);
 
   gl.setRenderTarget(originalRenderTarget);
   gl.outputColorSpace = originalOutputColorSpace;

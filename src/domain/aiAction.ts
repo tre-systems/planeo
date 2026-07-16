@@ -36,3 +36,17 @@ export const AIResponseSchema = z.object({
 });
 
 export type ParsedAIResponse = z.infer<typeof AIResponseSchema>;
+
+// The agent's own situation, sent with each decision request so the model
+// knows where it is and what it just did — without this every call is an
+// amnesiac frame and agents spin in place. Length-capped like the chat
+// history: the action is a billable public endpoint.
+export const AgentSelfStateSchema = z.object({
+  // World-space position, rounded; y is fixed so [x, z] carries the meaning.
+  position: z.tuple([z.number(), z.number()]),
+  // Compass-style yaw in degrees (atan2(dir.x, dir.z)), -180..180.
+  headingDeg: z.number().min(-180).max(180),
+  lastActions: z.array(AIActionSchema).max(5),
+});
+
+export type AgentSelfState = z.infer<typeof AgentSelfStateSchema>;

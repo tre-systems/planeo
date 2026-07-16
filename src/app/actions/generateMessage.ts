@@ -1,6 +1,6 @@
 "use server";
 
-import { type GenerateContentConfig } from "@google/genai";
+import { type GenerateContentConfig, type Schema, Type } from "@google/genai";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
@@ -10,7 +10,12 @@ import {
   actionOk,
   type ActionResult,
 } from "@/domain/actionResult";
-import { AIResponseSchema, type ParsedAIResponse } from "@/domain/aiAction";
+import {
+  AIResponseSchema,
+  AgentSelfStateSchema,
+  type AgentSelfState,
+  type ParsedAIResponse,
+} from "@/domain/aiAction";
 import { getAIAgentById, senderDisplayName } from "@/domain/aiAgent";
 import { Message, MessageSchema } from "@/domain/message";
 import { agentDecisionTooSoon, aiCallBlocked } from "@/lib/aiGuard";
@@ -28,7 +33,42 @@ export type ChatHistory = z.infer<typeof MessageSchema>[];
 // an unbounded history array must not be able to inflate the prompt. The real
 // client sends at most the last 10 messages.
 const ChatHistorySchema = z.array(MessageSchema).max(20);
-const ImageDataUrlSchema = z.string().startsWith("data:image/png;base64,");
+const ImageDataUrlSchema = z.string().startsWith("data:image/jpeg;base64,");
+
+// Constrained-decoding schema for the vision decision (Gemini responseSchema).
+// A flat shape rather than a union — flash-tier models follow it more
+// reliably, zod strips the unused fields, and AIResponseSchema stays the
+// strict contract (it also enforces ranges, which Schema cannot express).
+const aiResponseGeminiSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    chatMessage: {
+      type: Type.STRING,
+      description: "A brief spoken line, one sentence or a question.",
+    },
+    action: {
+      type: Type.OBJECT,
+      properties: {
+        type: { type: Type.STRING, enum: ["move", "turn", "none"] },
+        direction: {
+          type: Type.STRING,
+          enum: ["forward", "backward", "left", "right"],
+          description: "forward/backward for move; left/right for turn.",
+        },
+        distance: {
+          type: Type.NUMBER,
+          description: "For move: grid squares to travel, 1-5.",
+        },
+        degrees: {
+          type: Type.NUMBER,
+          description: "For turn: how far to rotate, 1-45.",
+        },
+      },
+      required: ["type"],
+    },
+  },
+  required: ["action"],
+};
 
 // Broadcast a chat message through the EventHub Durable Object (the single
 // real-time authority). Best-effort: failures are logged, not thrown, so a
@@ -105,10 +145,21 @@ export const generateAiChatMessage = async (
   }
 };
 
+// One line per recent action, so the model can see (and break) its own loops.
+const describeAction = (
+  action: AgentSelfState["lastActions"][number],
+): string => {
+  if (!action || action.type === "none") return "did nothing";
+  if (action.type === "move")
+    return `moved ${action.direction} ${action.distance} square(s)`;
+  return `turned ${action.direction} ${action.degrees}°`;
+};
+
 export const generateAiActionAndChat = async (
   aiAgentId: string,
   imageDataUrl: string,
   chatHistory: ChatHistory,
+  selfState: AgentSelfState,
   writeToken?: string,
 ): Promise<ActionResult<ParsedAIResponse>> => {
   const blocked = aiCallBlocked(writeToken);
@@ -125,10 +176,12 @@ export const generateAiActionAndChat = async (
   }
 
   const validatedHistory = ChatHistorySchema.safeParse(chatHistory);
+  const validatedSelf = AgentSelfStateSchema.safeParse(selfState);
   if (
     !aiAgentId ||
     !ImageDataUrlSchema.safeParse(imageDataUrl).success ||
-    !validatedHistory.success
+    !validatedHistory.success ||
+    !validatedSelf.success
   ) {
     log.warn("ai.action", "Invalid input to generateAiActionAndChat");
     return actionError("invalid-input");
@@ -146,59 +199,52 @@ export const generateAiActionAndChat = async (
     return actionError("invalid-input");
   }
 
-  const systemPrompt = `You awaken with no prior memories of who you are or how you got here. 
-  You feel lost, disoriented, scared and freaking out. 
-  You are now trying to make sense of your surroundings and remember what you\'ve done recently. 
-  Imagine being someone in this situation and act and speak accordingly.
+  // Static persona: byte-identical on every call and sent as the system
+  // instruction, so the changing parts (pose, actions, chat, image) come
+  // last — the ordering Gemini's implicit prefix caching wants. The JSON
+  // format lives in responseSchema, not prose.
+  const systemInstruction = `You awaken with no prior memories of who you are or how you got here.
+You feel lost, disoriented, scared and freaking out.
+You are now trying to make sense of your surroundings and remember what you've done recently.
+Imagine being someone in this situation and act and speak accordingly.
 
-You are provided with an image of your current view.
+Each turn you receive: where you are and what you recently did, the recent chat, and an image of your current view.
 
-This is what has been said by you and others:
-Chat History (SenderName: MessageText):
+When describing your observations, clearly distinguish between what you are *currently seeing*, what you *saw previously*, and what you *recall from the chat history or your recent actions*. For example, say 'I currently see...' or 'I previously saw...' or 'I recall we discussed...'.
+
+Actively explore your surroundings. Turning to scan the area is a good way to find new things or understand your location better. If you see something interesting, you can turn to get a better look or move towards it. Try to interact with objects and other beings you encounter. Check your recent actions — if you have been turning the same way repeatedly, do something different.
+
+If you see an image on a cube that you recognize (e.g., a famous painting), briefly mention what it is, who painted it, and a small interesting fact or piece of history about it if you know. Keep this part concise.
+
+Talk to other entities. Keep your messages BRIEF, like one sentence or a question. Share only essential observations, feelings, or questions.
+Discuss your situation with them and try to make plans together.
+Respond to other entities, seek them out. Figure out who you are and work together. Don't keep repeating their names.
+
+Actions: "move" travels forward/backward along your facing (distance in grid squares, 1-5); "turn" rotates left/right by 1-45 degrees; "none" stays put.`;
+
+  const self = validatedSelf.data;
+  const recentActions =
+    self.lastActions.length > 0
+      ? self.lastActions.map(describeAction).join("; ")
+      : "nothing yet";
+
+  const situation = `You think you might be called ${agentDisplayName}.
+You are at position (${self.position[0]}, ${self.position[1]}), facing ${Math.round(self.headingDeg)}°.
+Your most recent actions, oldest first: ${recentActions}.
+
+Chat history (SenderName: MessageText):
 ${validatedHistory.data
   .map((msg) => `${senderDisplayName(msg)}: ${msg.text}`)
   .join("\n")}
 
-You think you might be called ${agentDisplayName}
-
-When describing your observations, clearly distinguish between what you are *currently seeing*, what you *saw previously*, and what you *recall from the chat history or previous actions*. For example, say 'I currently see...' or 'I previously saw...' or 'I recall we discussed...'.
-
-Actively explore your surroundings. Turning to scan the area is a good way to find new things or understand your location better. If you see something interesting, you can turn to get a better look or move towards it. Try to interact with objects and other beings you encounter.
-
-If you see an image on a cube that you recognize (e.g., a famous painting), briefly mention what it is, who painted it, and a small interesting fact or piece of history about it if you know. Keep this part concise.
-
-Talk to other entities. Keep your messages BRIEF, like one sentence or a question. Share only essential observations, feelings, or questions. 
-Discuss your situation with them and try to make plans together. 
-Figure out who you are and work together. 
-
-Respond, to other entities, seek them out. Figure out who you are and work together. Don't keep repeating their names.
-
-Output Format: Respond with a single JSON object adhering to this structure:
-\\\`\\\`\\\`json
-{
-  "chatMessage": "Your brief message. (e.g., \'I spot an eye!\', \'What is this cube?\', \'Is anyone there?\', \'What should we do next?\')",
-  "action": {
-    "type": "move" | "turn" | "none",
-    // Conditional properties based on 'type':
-    // For "turn": { "direction": "left" | "right", "degrees": number_between_30_and_45 }
-    // For "move": { "direction": "forward" | "backward", "distance": number_of_grid_squares }
-    // For "none": {}
-  }
-}
-\\\`\\\`\\\`
-
-Action Examples:
-- Scan: { "type": "turn", "direction": "right", "degrees": 34 }
-- Approach eye/object: { "type": "move", "direction": "forward", "distance": 2 }
-
-Your response:`;
+Your current view is attached. Decide what to say and do now.`;
 
   const contents = [
     {
       role: "user",
       parts: [
-        { inlineData: { mimeType: "image/png", data: base64ImageData } },
-        { text: systemPrompt },
+        { text: situation },
+        { inlineData: { mimeType: "image/jpeg", data: base64ImageData } },
       ],
     },
   ];
@@ -206,6 +252,7 @@ Your response:`;
   // @google/genai takes model parameters under `config` (the old SDK's
   // top-level `generationConfig` field is silently ignored).
   const config: GenerateContentConfig = {
+    systemInstruction,
     temperature: 0.4,
     topP: 0.7,
     topK: 20,
@@ -214,6 +261,8 @@ Your response:`;
     // a cut-off response fails parsing and wastes the whole billable call.
     maxOutputTokens: 256,
     responseMimeType: "application/json",
+    // Constrained decoding: the model cannot emit fences or malformed JSON.
+    responseSchema: aiResponseGeminiSchema,
   };
 
   const request = {
@@ -236,16 +285,11 @@ Your response:`;
       return actionError("unavailable");
     }
 
-    let jsonToParse = aiResponseText.trim();
-    if (jsonToParse.startsWith("```json") && jsonToParse.endsWith("```")) {
-      jsonToParse = jsonToParse.substring(7, jsonToParse.length - 3).trim();
-    } else if (jsonToParse.startsWith("```") && jsonToParse.endsWith("```")) {
-      jsonToParse = jsonToParse.substring(3, jsonToParse.length - 3).trim();
-    }
-
+    // responseSchema guarantees raw JSON (no fences); the try/catch stays as
+    // the boundary check.
     let parsedJson;
     try {
-      parsedJson = JSON.parse(jsonToParse);
+      parsedJson = JSON.parse(aiResponseText.trim());
     } catch (jsonParseError) {
       log.error("ai.action", "Failed to parse model JSON", {
         agent: agentDisplayName,

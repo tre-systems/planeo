@@ -25,7 +25,7 @@ import { captureView } from "./aiAgentCapture";
 import { applyAgentAction } from "./aiAgentMovement";
 
 import type { EyeUpdateType, Vec3 as DomainVec3 } from "@/domain";
-import type { AIAction } from "@/domain/aiAction";
+import type { AIAction, AgentSelfState } from "@/domain/aiAction";
 
 const VISUAL_UPDATE_INTERVAL_MS = 100; // For smoother view updates (~10 FPS)
 // How often each AI thinks (LLM call). This is the agent loop's pacing — only
@@ -36,6 +36,9 @@ const DECISION_MAKING_INTERVAL_MS = 5000;
 // refusals are certain to repeat, so back off well past the normal cadence.
 const REFUSAL_BACKOFF_MS = 60_000;
 const MOVEMENT_DISTANCE_MULTIPLIER = 10;
+// How many recent actions each agent carries into its next prompt (must not
+// exceed AgentSelfStateSchema's cap).
+const ACTION_MEMORY_LENGTH = 5;
 
 export const useAIAgentController = (myId: string) => {
   const { gl, scene: mainScene } = useThree();
@@ -56,6 +59,9 @@ export const useAIAgentController = (myId: string) => {
   const lastVisualUpdateTime = useRef<Record<string, number>>({});
   const lastDecisionTime = useRef<Record<string, number>>({});
   const decisionProcessingLock = useRef<Set<string>>(new Set());
+  // Per-agent ring buffer of applied actions, sent with each decision so the
+  // model can see (and break) its own repetition loops.
+  const lastActionsRef = useRef<Record<string, AIAction[]>>({});
 
   useEffect(() => {
     // Cameras and render targets are only used by the host's capture loop;
@@ -142,6 +148,22 @@ export const useAIAgentController = (myId: string) => {
 
         const chatHistory = messages.slice(-10);
 
+        // The agent's own situation: pose from the animated eye state, plus
+        // its recent actions — without these each call is an amnesiac frame.
+        const agentState = managedEyes[agentId];
+        if (!agentState) return; // extractImageDataFromRenderer already checked
+        const dirX = agentState.lookAt.x - agentState.position.x;
+        const dirZ = agentState.lookAt.z - agentState.position.z;
+        const selfState: AgentSelfState = {
+          position: roundArray([
+            agentState.position.x,
+            agentState.position.z,
+          ]) as [number, number],
+          headingDeg:
+            Math.round(((Math.atan2(dirX, dirZ) * 180) / Math.PI) * 10) / 10,
+          lastActions: lastActionsRef.current[agentId] ?? [],
+        };
+
         log.debug("ai.controller", "Requesting decision", {
           agentId,
           imageBytes: imageDataUrl.length,
@@ -150,6 +172,7 @@ export const useAIAgentController = (myId: string) => {
           agentId,
           imageDataUrl,
           chatHistory,
+          selfState,
           worldWriteToken(),
         );
 
@@ -170,6 +193,12 @@ export const useAIAgentController = (myId: string) => {
         }
 
         const movementAction: AIAction = decision.value.action;
+
+        // Remember the decision (including "none") for the next prompt.
+        const history = lastActionsRef.current[agentId] ?? [];
+        lastActionsRef.current[agentId] = [...history, movementAction].slice(
+          -ACTION_MEMORY_LENGTH,
+        );
 
         if (movementAction && movementAction.type !== "none") {
           log.debug("ai.controller", "Executing movement", {

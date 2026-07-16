@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AIResponseSchema } from "./aiAction";
+import { AgentSelfStateSchema, AIResponseSchema } from "./aiAction";
 
 describe("AIResponseSchema", () => {
   it("accepts move / turn / none and a null action", () => {
@@ -42,5 +42,36 @@ describe("AIResponseSchema", () => {
     expect(AIResponseSchema.safeParse({ chatMessage: "hi" }).success).toBe(
       false,
     );
+  });
+});
+
+describe("AgentSelfStateSchema", () => {
+  const base = {
+    position: [10.5, -20],
+    headingDeg: 130,
+    lastActions: [{ type: "turn", direction: "left", degrees: 30 }],
+  };
+
+  it("accepts a valid self state, including an empty action history", () => {
+    expect(AgentSelfStateSchema.safeParse(base).success).toBe(true);
+    expect(
+      AgentSelfStateSchema.safeParse({ ...base, lastActions: [] }).success,
+    ).toBe(true);
+  });
+
+  it("caps the action history at 5 (billable endpoint input)", () => {
+    const six = Array.from({ length: 6 }, () => ({ type: "none" }));
+    expect(
+      AgentSelfStateSchema.safeParse({ ...base, lastActions: six }).success,
+    ).toBe(false);
+  });
+
+  it("bounds headingDeg to -180..180 and requires an [x, z] pair", () => {
+    expect(
+      AgentSelfStateSchema.safeParse({ ...base, headingDeg: 200 }).success,
+    ).toBe(false);
+    expect(
+      AgentSelfStateSchema.safeParse({ ...base, position: [1] }).success,
+    ).toBe(false);
   });
 });

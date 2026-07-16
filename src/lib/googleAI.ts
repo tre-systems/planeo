@@ -20,7 +20,7 @@ interface GoogleAIError extends Error {
 }
 
 // Lazily creates and caches a single GoogleGenAI client from GOOGLE_AI_API_KEY.
-export const getGoogleAIClient = async (): Promise<GoogleGenAI> => {
+export const getGoogleAIClient = (): GoogleGenAI => {
   if (genAIClient) {
     return genAIClient;
   }
@@ -34,26 +34,16 @@ export const getGoogleAIClient = async (): Promise<GoogleGenAI> => {
   return genAIClient;
 };
 
-// Config for the active text-generation model.
-//
-// Defaults target Gemini 3.1 Flash-Lite — the cheapest current multimodal tier,
-// right for a high-volume agent loop. Override per deployment via env
-// (GOOGLE_TEXT_MODEL / GOOGLE_VISION_MODEL) so model churn never needs a code
-// change: Google retires model ids aggressively (every 1.5 and 2.0 id now 404s).
-const getActiveTextModel = () => {
-  return {
-    provider: "google",
-    name: process.env["GOOGLE_TEXT_MODEL"] || "gemini-3.1-flash-lite",
-  };
-};
+// Active model names. Defaults target Gemini 3.1 Flash-Lite — the cheapest
+// current multimodal tier, right for a high-volume agent loop. Override per
+// deployment via env (GOOGLE_TEXT_MODEL / GOOGLE_VISION_MODEL) so model churn
+// never needs a code change: Google retires model ids aggressively (every 1.5
+// and 2.0 id now 404s).
+const getActiveTextModelName = (): string =>
+  process.env["GOOGLE_TEXT_MODEL"] || "gemini-3.1-flash-lite";
 
-// Config for the active vision-capable model.
-export const getActiveVisionModel = () => {
-  return {
-    provider: "google",
-    name: process.env["GOOGLE_VISION_MODEL"] || "gemini-3.1-flash-lite",
-  };
-};
+export const getActiveVisionModelName = (): string =>
+  process.env["GOOGLE_VISION_MODEL"] || "gemini-3.1-flash-lite";
 
 type AIConfigOverrides = Partial<GenerateContentConfig>;
 
@@ -64,8 +54,8 @@ export const generateTextCompletion = async (
   configOverrides?: AIConfigOverrides,
 ): Promise<string | undefined> => {
   try {
-    const genAI: GoogleGenAI = await getGoogleAIClient();
-    const textModelConfig = getActiveTextModel();
+    const genAI: GoogleGenAI = getGoogleAIClient();
+    const model = getActiveTextModelName();
 
     // @google/genai takes model parameters under `config` (the old
     // @google/generative-ai SDK's top-level `generationConfig`/`safetySettings`
@@ -81,7 +71,7 @@ export const generateTextCompletion = async (
     };
 
     const request = {
-      model: textModelConfig.name,
+      model,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: { ...baseConfig, ...configOverrides },
     };

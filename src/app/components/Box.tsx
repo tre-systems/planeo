@@ -7,11 +7,11 @@ import {
   RigidBody,
   type RapierRigidBody,
 } from "@react-three/rapier";
-import React, { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import * as THREE from "three";
 
-import { type Vec3 } from "@/domain";
 import { type ValidatedBoxUpdatePayloadType } from "@/domain/box";
+import { type Vec3 } from "@/domain/common";
 import { GROUND_Y_POSITION } from "@/domain/sceneConstants";
 import { roundArray } from "@/lib/utils";
 
@@ -43,7 +43,7 @@ interface SyncedRigidBoxProps {
   isHost: boolean;
 }
 
-const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box, isHost }) => {
+const SyncedRigidBox = ({ box, isHost }: SyncedRigidBoxProps) => {
   const rigidBodyRef = useRef<RapierRigidBody>(null);
   const lastTransmittedPRef = useRef<Vec3 | undefined>(undefined);
   const lastTransmittedORef = useRef<Vec3 | undefined>(undefined);
@@ -139,8 +139,8 @@ const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box, isHost }) => {
             );
           }
           if (finalO) {
-            const q = new THREE.Quaternion().setFromEuler(
-              new THREE.Euler(...finalO),
+            const q = scratchNewQuaternion.setFromEuler(
+              scratchEuler.set(...finalO),
             );
             rigidBodyRef.current.setRotation(
               { x: q.x, y: q.y, z: q.z, w: q.w },

@@ -38,7 +38,7 @@ describe("EventSchema", () => {
     ).toBe(true);
   });
 
-  it("rejects unknown types (incl. the removed aiVision) and bad shapes", () => {
+  it("rejects unknown types and bad shapes", () => {
     expect(
       EventSchema.safeParse({ type: "aiVision", userId: "u" }).success,
     ).toBe(false);

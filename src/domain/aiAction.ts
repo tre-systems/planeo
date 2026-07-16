@@ -18,7 +18,7 @@ const NoActionSchema = z.object({
 });
 
 // A tagged union of the action variants; null means "no action".
-export const AIActionSchema = z
+const AIActionSchema = z
   .discriminatedUnion("type", [
     MoveActionSchema,
     TurnActionSchema,

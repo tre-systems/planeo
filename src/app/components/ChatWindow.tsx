@@ -16,7 +16,7 @@ interface ChatWindowProps {
 export const ChatWindow = ({ myId }: ChatWindowProps) => {
   const messages = useCommunicationStore((s) => s.messages);
   const addMessage = useCommunicationStore((s) => s.addMessage);
-  const { sendChatMessage } = useEventStore.getState();
+  const sendChatMessage = useEventStore((s) => s.sendChatMessage);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export const ChatWindow = ({ myId }: ChatWindowProps) => {
         border: "1px solid #444",
         backgroundColor: "#222228",
         padding: "10px",
-        width: "300px",
+        width: "100%",
         height: "100%",
         display: "flex",
         flexDirection: "column",

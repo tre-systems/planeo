@@ -1,3 +1,5 @@
+// 2-dp rounding: the precision the eye-reporting change-detection compares
+// at, and what keeps wire payloads small.
 export const roundArray = (arr: number[]): number[] =>
   arr.map((n) => Math.round(n * 100) / 100);
 
@@ -5,7 +7,7 @@ export const roundVec3 = (
   v: [number, number, number],
 ): [number, number, number] => roundArray(v) as [number, number, number];
 
-export const VEC3_EPSILON = 0.001;
+const VEC3_EPSILON = 0.001;
 
 export const areVec3sEqual = (
   a: Readonly<[number, number, number]> | undefined,
@@ -39,7 +41,7 @@ export const throttle = <T extends (...args: any[]) => any>(
 ): ((
   ...args: Parameters<T>
 ) => Promise<Awaited<ReturnType<T>> | undefined>) => {
-  let lastFunc: NodeJS.Timeout | undefined;
+  let lastFunc: ReturnType<typeof setTimeout> | undefined;
   let lastRan: number | undefined;
   let supersededResolve: ((value: undefined) => void) | undefined;
 

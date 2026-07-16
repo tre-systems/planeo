@@ -29,11 +29,10 @@ export const postWorldEvent = (
 };
 
 // Awaited POST that surfaces failures: non-2xx and network errors are logged
-// (with the human-readable `kind` woven in) and reported via `onError` so the
-// caller can record them (e.g. eventStore's lastError).
+// with the human-readable `kind` woven in; `onError` lets a caller react.
 export const postWorldEventChecked = async (
   payload: unknown,
-  { kind, onError }: { kind: string; onError: (msg: string) => void },
+  { kind, onError }: { kind: string; onError?: (msg: string) => void },
 ): Promise<void> => {
   try {
     const response = await fetch(EVENTS_ENDPOINT, {
@@ -48,12 +47,12 @@ export const postWorldEventChecked = async (
         status: response.status,
         body: errorData,
       });
-      onError(`Server error sending ${kind}: ${response.status}`);
+      onError?.(`Server error sending ${kind}: ${response.status}`);
     }
   } catch (error) {
     log.error("sse", `Network error sending ${kind}`, {
       error: String(error),
     });
-    onError(`Network error sending ${kind}`);
+    onError?.(`Network error sending ${kind}`);
   }
 };

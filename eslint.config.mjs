@@ -30,6 +30,12 @@ const eslintConfig = [
             "object",
             "type",
           ],
+          // Classify the "@/…" alias as internal explicitly — no TS import
+          // resolver needed (the order rules never resolve modules).
+          pathGroups: [
+            { pattern: "@/**", group: "internal" },
+            { pattern: "@components/**", group: "internal" },
+          ],
           "newlines-between": "always",
           alphabetize: {
             order: "asc",
@@ -39,11 +45,6 @@ const eslintConfig = [
       ],
       "import/first": "warn",
       "import/newline-after-import": "warn",
-    },
-    settings: {
-      "import/resolver": {
-        typescript: {},
-      },
     },
   },
 ];

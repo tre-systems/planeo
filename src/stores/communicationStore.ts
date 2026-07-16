@@ -3,47 +3,27 @@ import { immer } from "zustand/middleware/immer";
 
 import type { Message } from "@/domain/message";
 
-// --- Chat UI Slice ---
-interface ChatUIState {
+// Chat state: the shared message log plus the two UI flags. isChatInputFocused
+// gates the camera's WASD handling in Scene so typing doesn't move the player.
+interface CommunicationStore {
+  messages: Message[];
   isChatVisible: boolean;
   isChatInputFocused: boolean;
-}
-
-interface ChatUIActions {
+  addMessage: (message: Message) => void;
   toggleChatVisibility: () => void;
   setChatInputFocused: (isFocused: boolean) => void;
 }
 
-const initialChatUIState: ChatUIState = {
-  isChatVisible: false,
-  isChatInputFocused: false,
-};
-
-// --- Messages Slice ---
-interface MessagesState {
-  messages: Message[];
-}
-
-interface MessagesActions {
-  addMessage: (message: Message) => void;
-}
-
-const initialMessagesState: MessagesState = {
-  messages: [],
-};
-
-// --- Combined Store ---
-export interface CommunicationState extends ChatUIState, MessagesState {}
-export interface CommunicationActions extends ChatUIActions, MessagesActions {}
-
-export const useCommunicationStore = create<
-  CommunicationState & CommunicationActions
->()(
+export const useCommunicationStore = create<CommunicationStore>()(
   immer((set) => ({
-    ...initialChatUIState,
-    ...initialMessagesState,
+    messages: [],
+    isChatVisible: false,
+    isChatInputFocused: false,
 
-    // Chat UI Actions
+    addMessage: (message) =>
+      set((state) => {
+        state.messages.push(message);
+      }),
     toggleChatVisibility: () =>
       set((state) => {
         state.isChatVisible = !state.isChatVisible;
@@ -51,12 +31,6 @@ export const useCommunicationStore = create<
     setChatInputFocused: (isFocused) =>
       set((state) => {
         state.isChatInputFocused = isFocused;
-      }),
-
-    // Messages Actions
-    addMessage: (message) =>
-      set((state) => {
-        state.messages.push(message);
       }),
   })),
 );

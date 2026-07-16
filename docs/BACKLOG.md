@@ -79,6 +79,8 @@ Prioritised, P1 (highest value) → P3. None are known bugs in shipped behavior.
 
 ### Ops / hygiene
 
+- **`next lint` is deprecated** (removed in Next 16) — migrate the lint scripts
+  to the ESLint CLI (`next lint` → `eslint`) before the next Next major bump.
 - **Dependency bump.** `npm audit` flags 19 issues, but all are dev/build-tooling
   transitive (eslint, playwright, wrangler, postcss toolchains) or non-exploitable
   in our usage (the prod `uuid` finding needs a `buf` argument we never pass) —

@@ -34,7 +34,7 @@ Follow these instructions to set up and run Planeo on your local machine.
 ### Prerequisites
 
 - Node.js (v22 or higher recommended)
-- npm (comes with Node.js) or yarn
+- npm (comes with Node.js)
 - Graphviz (optional, only for re-rendering the architecture diagrams: `brew install graphviz`)
 
 ### Setup Instructions
@@ -50,8 +50,6 @@ Follow these instructions to set up and run Planeo on your local machine.
 
     ```bash
     npm install
-    # or
-    # yarn install
     ```
 
 3.  **Set up environment variables:**
@@ -88,6 +86,9 @@ Follow these instructions to set up and run Planeo on your local machine.
       - _Used by: `src/components/ChatMessage.tsx`, `src/app/actions/tts.ts`._
 
     In production, secrets are set with `wrangler secret put <NAME>`.
+
+    See the comments in `wrangler.jsonc` and `.dev.vars.example` for the
+    optional write-gate (`WORLD_WRITE_TOKEN`) and hourly budget caps.
 
 4.  **Run the development server (UI only):**
 

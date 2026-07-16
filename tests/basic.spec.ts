@@ -66,10 +66,7 @@ test.describe("Multi-User Event Synchronization", () => {
   });
 });
 
-test("original: has title and receives initial event data", async ({
-  page,
-  request,
-}) => {
+test("has title and receives initial event data", async ({ page, request }) => {
   const postData = {
     type: "eyeUpdate",
     id: "test-eye",

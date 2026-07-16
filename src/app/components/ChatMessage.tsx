@@ -4,9 +4,10 @@ import { useEffect, useRef } from "react";
 
 import { synthesizeSpeechAction } from "@/app/actions/tts";
 import { senderDisplayName } from "@/domain/aiAgent";
+import type { Message } from "@/domain/message";
 import { log } from "@/lib/log";
 
-import type { Message } from "@/domain/message";
+const ttsEnabled = process.env["NEXT_PUBLIC_TTS_ENABLED"] !== "false";
 
 interface ChatMessageProps {
   message: Message;
@@ -17,7 +18,6 @@ export const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const isMyMessage = message.userId === currentUserId;
-  const ttsEnabled = process.env["NEXT_PUBLIC_TTS_ENABLED"] !== "false"; // Defaults to true if not set or not 'false'
 
   useEffect(() => {
     if (!ttsEnabled || isMyMessage || message.text.startsWith("/")) {
@@ -87,10 +87,7 @@ export const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
       }
     };
 
-    // ttsEnabled and !isMyMessage are already guaranteed by the early return above.
-    if (message.id) {
-      playAudio();
-    }
+    playAudio();
 
     return () => {
       isMounted = false;
@@ -102,14 +99,7 @@ export const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
         audioRef.current = null;
       }
     };
-  }, [
-    message.id,
-    message.text,
-    message.userId,
-    isMyMessage,
-    currentUserId,
-    ttsEnabled,
-  ]);
+  }, [message.id, message.text, message.userId, isMyMessage]);
 
   return (
     <div style={{ marginBottom: "5px", color: "#e0e0e0" }}>

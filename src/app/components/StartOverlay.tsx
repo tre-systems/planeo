@@ -1,14 +1,6 @@
 "use client";
 
-import { useSimulationStore } from "@/stores/simulationStore";
-
-export const StartOverlay = () => {
-  const setIsStarted = useSimulationStore((state) => state.setIsStarted);
-
-  const handleClick = () => {
-    setIsStarted(true);
-  };
-
+export const StartOverlay = ({ onStart }: { onStart: () => void }) => {
   return (
     <div
       style={{
@@ -26,7 +18,7 @@ export const StartOverlay = () => {
         cursor: "pointer",
         zIndex: 1000,
       }}
-      onClick={handleClick}
+      onClick={onStart}
     >
       Click to Start
     </div>

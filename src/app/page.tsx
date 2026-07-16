@@ -3,10 +3,11 @@
 import { nanoid } from "nanoid";
 import { useRef } from "react";
 
-import { ChatToggleButton } from "@/app/components/ChatToggleButton";
-import { ChatWindow } from "@/components/ChatWindow";
-import { useAiChat, useEyesDataSynchronizer } from "@/hooks";
+import { useAiChat } from "@/hooks/useAiChat";
+import { useEyesDataSynchronizer } from "@/hooks/useEyesDataSynchronizer";
 import { useCommunicationStore } from "@/stores/communicationStore";
+import { ChatToggleButton } from "@components/ChatToggleButton";
+import { ChatWindow } from "@components/ChatWindow";
 import Scene from "@components/Scene";
 
 const HomePage = () => {
@@ -18,12 +19,13 @@ const HomePage = () => {
 
   return (
     <>
-      <main className="flex min-h-screen flex-col items-center justify-center bg-[#111119]">
-        <div className="w-full h-screen">
-          <Scene myId={myId} />
-        </div>
+      <main style={{ width: "100%", height: "100vh" }}>
+        <Scene myId={myId} />
       </main>
       <ChatToggleButton />
+      {/* Hidden via display:none rather than unmounting: ChatWindow stays
+          mounted so ChatMessage's TTS effects keep firing while the chat is
+          hidden. */}
       <div
         style={{
           position: "fixed",

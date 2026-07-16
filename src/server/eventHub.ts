@@ -1,8 +1,7 @@
 // EventHub Durable Object — the single authority for Planeo's shared real-time
 // world. One instance (idFromName("global")) holds every connected client's eye,
 // the physics boxes, and the set of open SSE connections, and broadcasts changes
-// to all subscribers. This replaces the in-memory module globals that the old
-// Node/Fly server kept in src/app/api/events/sseStore.ts.
+// to all subscribers.
 //
 // Bundled by Wrangler (not Next), so it imports domain schemas from their
 // specific files via relative paths — never "@/domain" or modules that read

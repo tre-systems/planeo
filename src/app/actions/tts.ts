@@ -7,6 +7,7 @@ import {
   actionOk,
   type ActionResult,
 } from "@/domain/actionResult";
+import { parseConfigInt } from "@/domain/config";
 import { getGoogleAccessToken } from "@/lib/googleAuth";
 import { log } from "@/lib/log";
 import { retry } from "@/lib/retry";
@@ -44,12 +45,12 @@ const chirp3Voices = [
   "en-US-Chirp3-HD-Zephyr",
 ];
 
+// The voice is always derived from userId (deterministic hash below) — a
+// caller-supplied voice name would be attack surface on a billable action
+// (premium tiers bill at multiples of Chirp pricing).
 const SynthesizeSpeechParamsSchema = z.object({
   text: z.string().min(1, "Text cannot be empty.").max(1000, "Text too long."),
   userId: z.string().min(1, "User ID cannot be empty."),
-  // Allowlisted: this is a billable public action, and an arbitrary voice
-  // name could select premium tiers billed at multiples of Chirp pricing.
-  voiceName: z.enum(chirp3Voices as [string, ...string[]]).optional(),
 });
 
 type SynthesizeSpeechParams = z.infer<typeof SynthesizeSpeechParamsSchema>;
@@ -117,10 +118,9 @@ const TTS_RATE_WINDOW_MS = 60 * 60 * 1000;
 const ttsCallTimes: number[] = [];
 
 const ttsRateLimited = (): boolean => {
-  const limit = Number.parseInt(
-    process.env["RATE_LIMIT_TTS_HOURLY"] || "240",
-    10,
-  );
+  // parseConfigInt (not parseInt): a malformed value would yield NaN, and
+  // `length >= NaN` is always false — the budget would silently be unlimited.
+  const limit = parseConfigInt(process.env["RATE_LIMIT_TTS_HOURLY"], 240);
   const cutoff = Date.now() - TTS_RATE_WINDOW_MS;
   while (ttsCallTimes.length > 0 && ttsCallTimes[0] < cutoff) {
     ttsCallTimes.shift();
@@ -152,8 +152,8 @@ export const synthesizeSpeechAction = async (
     return actionError("rate-limited");
   }
 
-  const { text, userId, voiceName: preferredVoiceName } = validationResult.data;
-  const voiceName = preferredVoiceName || getVoiceForUser(userId);
+  const { text, userId } = validationResult.data;
+  const voiceName = getVoiceForUser(userId);
   const languageCode = voiceName.split("-").slice(0, 2).join("-");
 
   return performSynthesis(text, voiceName, languageCode);

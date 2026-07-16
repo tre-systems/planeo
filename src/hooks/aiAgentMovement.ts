@@ -1,8 +1,7 @@
 import { Vector3 } from "three";
 
-import { EYE_Y_POSITION } from "@/domain/sceneConstants";
-
 import type { AIAction } from "@/domain/aiAction";
+import { EYE_Y_POSITION } from "@/domain/sceneConstants";
 
 // Pure movement math for an AI agent's eye. Given the agent's current pose
 // (position + lookAt) and an action, returns the new pose as fresh Vector3s.

@@ -5,8 +5,13 @@ import { useEffect, useRef, useCallback } from "react";
 import { PerspectiveCamera, WebGLRenderTarget } from "three";
 
 import { generateAiActionAndChat } from "@/app/actions/generateMessage";
+import type { AIAction, AgentSelfState } from "@/domain/aiAction";
 import { getAIAgents } from "@/domain/aiAgent";
-import { ValidatedEyeUpdatePayloadSchema } from "@/domain/event";
+import type { Vec3 as DomainVec3 } from "@/domain/common";
+import {
+  ValidatedEyeUpdatePayloadSchema,
+  type EyeUpdateType,
+} from "@/domain/event";
 import {
   AGENT_VIEW_WIDTH as CAPTURE_WIDTH,
   AGENT_VIEW_HEIGHT as CAPTURE_HEIGHT,
@@ -23,9 +28,6 @@ import { useEyesStore } from "@/stores/eyesStore";
 
 import { captureView } from "./aiAgentCapture";
 import { applyAgentAction } from "./aiAgentMovement";
-
-import type { EyeUpdateType, Vec3 as DomainVec3 } from "@/domain";
-import type { AIAction, AgentSelfState } from "@/domain/aiAction";
 
 const VISUAL_UPDATE_INTERVAL_MS = 100; // For smoother view updates (~10 FPS)
 // How often each AI thinks (LLM call). This is the agent loop's pacing — only
@@ -84,6 +86,8 @@ export const useAIAgentController = (myId: string) => {
         target.texture.colorSpace = gl.outputColorSpace;
         aiRenderTargetRefs.current[agent.id] = target;
       }
+      // Deliberately future-dated: the random offset staggers agents so
+      // their captures and LLM calls don't all land on the same frame.
       if (!lastVisualUpdateTime.current[agent.id]) {
         lastVisualUpdateTime.current[agent.id] =
           Date.now() + Math.random() * VISUAL_UPDATE_INTERVAL_MS;
@@ -205,12 +209,11 @@ export const useAIAgentController = (myId: string) => {
             agentId,
             action: movementAction,
           });
-          const currentAIState = managedEyes[agentId];
-          if (currentAIState) {
+          {
             const { position: newPosition, lookAt: newLookAt } =
               applyAgentAction(
-                currentAIState.position,
-                currentAIState.lookAt,
+                agentState.position,
+                agentState.lookAt,
                 movementAction,
                 MOVEMENT_DISTANCE_MULTIPLIER,
               );

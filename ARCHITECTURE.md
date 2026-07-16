@@ -40,22 +40,21 @@ the same agents and boxes.
 
 ## Codebase map
 
-| Path                           | Responsibility                                                                                                                                                                                                                       |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/app/layout.tsx`           | Root layout: fonts, metadata, PWA manifest. No providers.                                                                                                                                                                            |
-| `src/app/page.tsx`             | `HomePage` client component. Mints a per-client `myId` (`nanoid(6)`), mounts the scene + chat UI, starts the text-chat and eye-sync hooks.                                                                                           |
-| `src/app/components/Scene.tsx` | React Three Fiber host: opens the SSE connection, gates on the start overlay, owns the human camera and keyboard controls, renders the world.                                                                                        |
-| `src/app/components/`          | Scene-level R3F components: `Eye`/`Eyes` (agents + users), `Box` (physics cubes), `AIAgentViews` (HUD thumbnails), `StartOverlay`.                                                                                                   |
-| `src/components/`              | DOM chat UI: `ChatWindow`, `ChatMessage`, `ChatInput`.                                                                                                                                                                               |
-| `src/hooks/`                   | `useEventSource` (SSE in), `useEyePositionReporting` (position out), `useEyesDataSynchronizer`, `useAIAgentController` (agent vision + decisions; host only), `useAiChat` (text replies).                                            |
-| `src/app/actions/`             | Server actions (the only `"use server"` modules): `generateMessage.ts` (AI vision/action/chat), `tts.ts` (Google Cloud TTS via REST).                                                                                                |
-| `src/server/eventHub.ts`       | The `EventHub` Durable Object: the single real-time authority (eyes, boxes, open SSE connections) and the SSE endpoint handler.                                                                                                      |
-| `worker.ts`                    | Custom Worker entry: re-exports `EventHub`, routes `/api/events` to the DO, delegates everything else to the Next.js app.                                                                                                            |
-| `src/lib/`                     | `googleAI.ts` (Gemini client + model selection), `googleAuth.ts` (Web Crypto OAuth), `aiGuard.ts` (billable-call guards), `worldAuth.ts` (write token), `eventEgress.ts` (client POST door), `log.ts`, `retry.ts`, `exposeStore.ts`. |
-| `src/stores/`                  | Zustand stores (see below).                                                                                                                                                                                                          |
-| `src/domain/`                  | Zod schemas and shared constants (the data contracts).                                                                                                                                                                               |
-| `wrangler.jsonc`               | Worker config: `main = worker.ts`, the `EVENT_HUB` Durable Object binding + migration, non-secret `vars`.                                                                                                                            |
-| `open-next.config.ts`          | `@opennextjs/cloudflare` adapter config (default in-memory cache).                                                                                                                                                                   |
+| Path                           | Responsibility                                                                                                                                                                                                                                                                                 |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/layout.tsx`           | Root layout: metadata + PWA manifest. No providers.                                                                                                                                                                                                                                            |
+| `src/app/page.tsx`             | `HomePage` client component. Mints a per-client `myId` (`nanoid(6)`), mounts the scene + chat UI, starts the text-chat and eye-sync hooks.                                                                                                                                                     |
+| `src/app/components/Scene.tsx` | React Three Fiber host: opens the SSE connection, gates on the start overlay, owns the human camera and keyboard controls, renders the world.                                                                                                                                                  |
+| `src/app/components/`          | All client components: the R3F scene pieces (`Eye`/`Eyes`, `Box`, `AIAgentViews`, `StartOverlay`) and the DOM chat UI (`ChatWindow`, `ChatMessage`, `ChatInput`, `ChatToggleButton`).                                                                                                          |
+| `src/hooks/`                   | `useEventSource` (SSE in), `useEyePositionReporting` (position out), `useEyesDataSynchronizer`, `useAIAgentController` (agent vision + decisions; host only), `useAiChat` (text replies).                                                                                                      |
+| `src/app/actions/`             | Server actions (the only `"use server"` modules): `generateMessage.ts` (AI vision/action/chat), `tts.ts` (Google Cloud TTS via REST).                                                                                                                                                          |
+| `src/server/eventHub.ts`       | The `EventHub` Durable Object: the single real-time authority (eyes, boxes, open SSE connections) and the SSE endpoint handler.                                                                                                                                                                |
+| `worker.ts`                    | Custom Worker entry: re-exports `EventHub`, routes `/api/events` to the DO, delegates everything else to the Next.js app.                                                                                                                                                                      |
+| `src/lib/`                     | `googleAI.ts` (Gemini client + model selection), `googleAuth.ts` (Web Crypto OAuth), `aiGuard.ts` (billable-call guards), `worldAuth.ts` (write token), `eventEgress.ts` (client POST door), `aiDecisionPrompt.ts` (decision prompt + responseSchema), `log.ts`, `retry.ts`, `exposeStore.ts`. |
+| `src/stores/`                  | Zustand stores (see below).                                                                                                                                                                                                                                                                    |
+| `src/domain/`                  | Zod schemas and shared constants (the data contracts).                                                                                                                                                                                                                                         |
+| `wrangler.jsonc`               | Worker config: `main = worker.ts`, the `EVENT_HUB` Durable Object binding + migration, non-secret `vars`.                                                                                                                                                                                      |
+| `open-next.config.ts`          | `@opennextjs/cloudflare` adapter config (default in-memory cache).                                                                                                                                                                                                                             |
 
 ## Patterns
 
@@ -80,9 +79,10 @@ are tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md#pattern-consistency--gaps).
   payload before POSTing, so a client bug surfaces at the source as a logged
   schema error instead of a server 400 (`useEyePositionReporting`,
   `useAIAgentController`, `eventStore` senders).
-- **The LLM's output is a schema.** The model must return JSON matching
-  `AIResponseSchema`; the raw text is fence-stripped, parsed, validated, and
-  dropped if invalid (`generateMessage.ts`).
+- **The LLM's output is a schema.** The response is constrained-decoded against
+  a Gemini `responseSchema` (`aiDecisionPrompt.ts`), then still validated
+  against `AIResponseSchema` — zod owns the ranges `Schema` cannot express
+  (`generateMessage.ts`).
 - **Refinements for cross-field rules.** Invariants like "at least one of `p`/`l`"
   live in a `.refine()`d schema, not handler code (`ValidatedEyeUpdatePayloadSchema`,
   `ValidatedBoxUpdatePayloadSchema`).
@@ -226,7 +226,7 @@ rawEyeEventStore`, `chatMessage → communicationStore` with the own-echo
 ## Render & input
 
 [`Scene.tsx`](src/app/components/Scene.tsx) opens the SSE connection via
-`useEventSource`, then gates rendering on `useSimulationStore(isStarted)`. Until
+`useEventSource`, then gates rendering on a local `isStarted` state. Until
 the user clicks the `StartOverlay`, nothing renders — the gate exists so the
 browser's autoplay policy will allow audio once interaction begins. After start
 it mounts a `<Canvas>` (camera at `[48, 20, 120]`, `fov 75`, `near 1`,
@@ -370,7 +370,7 @@ with the Web Crypto API (RS256) in [`googleAuth.ts`](src/lib/googleAuth.ts) — 
 gRPC `@google-cloud/*` client cannot run on the Workers runtime. It
 deterministically assigns each `userId` one of 24 Chirp3-HD voices (by hash),
 synthesizes MP3, and returns base64.
-[`ChatMessage.tsx`](src/components/ChatMessage.tsx) calls it client-side for each
+[`ChatMessage.tsx`](src/app/components/ChatMessage.tsx) calls it client-side for each
 incoming message (skipping the user's own and `/`-commands) and plays the audio.
 Disabled when `NEXT_PUBLIC_TTS_ENABLED` is exactly `"false"`.
 
@@ -384,7 +384,6 @@ Disabled when `NEXT_PUBLIC_TTS_ENABLED` is exactly `"false"`.
 | `eyesStore`          | The rendered/animated eyes (Three `Vector3`/`ShaderMaterial`, opacity, scale, proximity-based conversation pairing).                                   |
 | `boxStore`           | Animated cube state (current/target position + orientation, color), lerped each frame.                                                                 |
 | `aiVisionStore`      | The latest agent-view thumbnails for the HUD.                                                                                                          |
-| `simulationStore`    | The single `isStarted` flag behind the start overlay.                                                                                                  |
 
 ### Eye lifecycle
 
@@ -405,7 +404,7 @@ stateDiagram-v2
 [`src/domain/`](src/domain/) holds the Zod contracts: `aiAction` (the
 `move`/`turn`/`none` action union and the `AIResponse` the vision model must
 return — `turn` is clamped to 1–45°), `message`, `event` (the SSE union),
-`eye`, `box`, `aiAgent` (config parsing + defaults), plus `sceneConstants`
+`box`, `aiAgent` (config parsing + defaults), plus `sceneConstants`
 (`EYE_RADIUS 8`, `EYE_Y_POSITION -11.9`, ground at -20) and `common`
 (`Vec3Schema`).
 

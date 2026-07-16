@@ -2,12 +2,17 @@
 
 import React, { useState } from "react";
 
+import { useCommunicationStore } from "@/stores/communicationStore";
+
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
 }
 
 export const ChatInput = ({ onSendMessage }: ChatInputProps) => {
   const [message, setMessage] = useState("");
+  const setChatInputFocused = useCommunicationStore(
+    (s) => s.setChatInputFocused,
+  );
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setMessage(event.target.value);
@@ -36,6 +41,9 @@ export const ChatInput = ({ onSendMessage }: ChatInputProps) => {
         value={message}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
+        // The focus flag gates the camera's WASD handling in Scene.
+        onFocus={() => setChatInputFocused(true)}
+        onBlur={() => setChatInputFocused(false)}
         placeholder="Type a message..."
         style={{
           flexGrow: 1,

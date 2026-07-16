@@ -1,8 +1,7 @@
 "use server";
 
-import { type GenerateContentConfig, type Schema, Type } from "@google/genai";
+import { type GenerateContentConfig } from "@google/genai";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 
 import {
@@ -18,57 +17,25 @@ import {
 } from "@/domain/aiAction";
 import { getAIAgentById, senderDisplayName } from "@/domain/aiAgent";
 import { Message, MessageSchema } from "@/domain/message";
+import {
+  agentSystemInstruction,
+  aiResponseGeminiSchema,
+  buildSituation,
+} from "@/lib/aiDecisionPrompt";
 import { agentDecisionTooSoon, aiCallBlocked } from "@/lib/aiGuard";
 import {
   getGoogleAIClient,
-  getActiveVisionModel,
+  getActiveVisionModelName,
   generateTextCompletion,
 } from "@/lib/googleAI";
 import { log } from "@/lib/log";
 import { retry } from "@/lib/retry";
-
-export type ChatHistory = z.infer<typeof MessageSchema>[];
 
 // Length-capped: these actions are billable and any client can call them, so
 // an unbounded history array must not be able to inflate the prompt. The real
 // client sends at most the last 10 messages.
 const ChatHistorySchema = z.array(MessageSchema).max(20);
 const ImageDataUrlSchema = z.string().startsWith("data:image/jpeg;base64,");
-
-// Constrained-decoding schema for the vision decision (Gemini responseSchema).
-// A flat shape rather than a union — flash-tier models follow it more
-// reliably, zod strips the unused fields, and AIResponseSchema stays the
-// strict contract (it also enforces ranges, which Schema cannot express).
-const aiResponseGeminiSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    chatMessage: {
-      type: Type.STRING,
-      description: "A brief spoken line, one sentence or a question.",
-    },
-    action: {
-      type: Type.OBJECT,
-      properties: {
-        type: { type: Type.STRING, enum: ["move", "turn", "none"] },
-        direction: {
-          type: Type.STRING,
-          enum: ["forward", "backward", "left", "right"],
-          description: "forward/backward for move; left/right for turn.",
-        },
-        distance: {
-          type: Type.NUMBER,
-          description: "For move: grid squares to travel, 1-5.",
-        },
-        degrees: {
-          type: Type.NUMBER,
-          description: "For turn: how far to rotate, 1-45.",
-        },
-      },
-      required: ["type"],
-    },
-  },
-  required: ["action"],
-};
 
 // Broadcast a chat message through the EventHub Durable Object (the single
 // real-time authority). Best-effort: failures are logged, not thrown, so a
@@ -97,20 +64,21 @@ const postChatMessageToEvents = async (message: Message): Promise<void> => {
 };
 
 export const generateAiChatMessage = async (
-  chatHistory: ChatHistory,
+  chatHistory: Message[],
   aiUserId: string,
   writeToken?: string,
 ): Promise<ActionResult<Message>> => {
-  const blocked = aiCallBlocked(writeToken);
-  if (blocked) {
-    log.warn("ai.chat", "Refusing AI chat call", { reason: blocked });
-    return actionError(blocked);
-  }
-
+  // Validate before the guard so an invalid request can't burn a budget slot.
   const validated = ChatHistorySchema.safeParse(chatHistory);
   if (!validated.success || !aiUserId) {
     log.warn("ai.chat", "Invalid input to generateAiChatMessage");
     return actionError("invalid-input");
+  }
+
+  const blocked = aiCallBlocked(writeToken);
+  if (blocked) {
+    log.warn("ai.chat", "Refusing AI chat call", { reason: blocked });
+    return actionError(blocked);
   }
 
   const agentName = senderDisplayName({ userId: aiUserId });
@@ -125,7 +93,7 @@ export const generateAiChatMessage = async (
 
     if (aiResponseText && aiResponseText.trim()) {
       const aiMessage: Message = {
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         userId: aiUserId,
         name: agentName,
         text: aiResponseText.trim(),
@@ -145,23 +113,29 @@ export const generateAiChatMessage = async (
   }
 };
 
-// One line per recent action, so the model can see (and break) its own loops.
-const describeAction = (
-  action: AgentSelfState["lastActions"][number],
-): string => {
-  if (!action || action.type === "none") return "did nothing";
-  if (action.type === "move")
-    return `moved ${action.direction} ${action.distance} square(s)`;
-  return `turned ${action.direction} ${action.degrees}°`;
-};
-
 export const generateAiActionAndChat = async (
   aiAgentId: string,
   imageDataUrl: string,
-  chatHistory: ChatHistory,
+  chatHistory: Message[],
   selfState: AgentSelfState,
   writeToken?: string,
 ): Promise<ActionResult<ParsedAIResponse>> => {
+  // Validate before the guards so an invalid request can't burn a budget
+  // slot or the agent's cadence window.
+  const validatedHistory = ChatHistorySchema.safeParse(chatHistory);
+  const validatedSelf = AgentSelfStateSchema.safeParse(selfState);
+  const base64ImageData = imageDataUrl.split(",")[1];
+  if (
+    !aiAgentId ||
+    !ImageDataUrlSchema.safeParse(imageDataUrl).success ||
+    !base64ImageData ||
+    !validatedHistory.success ||
+    !validatedSelf.success
+  ) {
+    log.warn("ai.action", "Invalid input to generateAiActionAndChat");
+    return actionError("invalid-input");
+  }
+
   const blocked = aiCallBlocked(writeToken);
   if (blocked) {
     log.warn("ai.action", "Refusing AI decision call", { reason: blocked });
@@ -175,69 +149,14 @@ export const generateAiActionAndChat = async (
     return actionError("rate-limited");
   }
 
-  const validatedHistory = ChatHistorySchema.safeParse(chatHistory);
-  const validatedSelf = AgentSelfStateSchema.safeParse(selfState);
-  if (
-    !aiAgentId ||
-    !ImageDataUrlSchema.safeParse(imageDataUrl).success ||
-    !validatedHistory.success ||
-    !validatedSelf.success
-  ) {
-    log.warn("ai.action", "Invalid input to generateAiActionAndChat");
-    return actionError("invalid-input");
-  }
-
   const agent = getAIAgentById(aiAgentId);
   const agentDisplayName = agent?.displayName || aiAgentId;
-  const visionModelConfig = getActiveVisionModel();
 
-  const base64ImageData = imageDataUrl.split(",")[1];
-  if (!base64ImageData) {
-    log.warn("ai.action", "Invalid image data URL format", {
-      agent: agentDisplayName,
-    });
-    return actionError("invalid-input");
-  }
-
-  // Static persona: byte-identical on every call and sent as the system
-  // instruction, so the changing parts (pose, actions, chat, image) come
-  // last — the ordering Gemini's implicit prefix caching wants. The JSON
-  // format lives in responseSchema, not prose.
-  const systemInstruction = `You awaken with no prior memories of who you are or how you got here.
-You feel lost, disoriented, scared and freaking out.
-You are now trying to make sense of your surroundings and remember what you've done recently.
-Imagine being someone in this situation and act and speak accordingly.
-
-Each turn you receive: where you are and what you recently did, the recent chat, and an image of your current view.
-
-When describing your observations, clearly distinguish between what you are *currently seeing*, what you *saw previously*, and what you *recall from the chat history or your recent actions*. For example, say 'I currently see...' or 'I previously saw...' or 'I recall we discussed...'.
-
-Actively explore your surroundings. Turning to scan the area is a good way to find new things or understand your location better. If you see something interesting, you can turn to get a better look or move towards it. Try to interact with objects and other beings you encounter. Check your recent actions — if you have been turning the same way repeatedly, do something different.
-
-If you see an image on a cube that you recognize (e.g., a famous painting), briefly mention what it is, who painted it, and a small interesting fact or piece of history about it if you know. Keep this part concise.
-
-Talk to other entities. Keep your messages BRIEF, like one sentence or a question. Share only essential observations, feelings, or questions.
-Discuss your situation with them and try to make plans together.
-Respond to other entities, seek them out. Figure out who you are and work together. Don't keep repeating their names.
-
-Actions: "move" travels forward/backward along your facing (distance in grid squares, 1-5); "turn" rotates left/right by 1-45 degrees; "none" stays put.`;
-
-  const self = validatedSelf.data;
-  const recentActions =
-    self.lastActions.length > 0
-      ? self.lastActions.map(describeAction).join("; ")
-      : "nothing yet";
-
-  const situation = `You think you might be called ${agentDisplayName}.
-You are at position (${self.position[0]}, ${self.position[1]}), facing ${Math.round(self.headingDeg)}°.
-Your most recent actions, oldest first: ${recentActions}.
-
-Chat history (SenderName: MessageText):
-${validatedHistory.data
-  .map((msg) => `${senderDisplayName(msg)}: ${msg.text}`)
-  .join("\n")}
-
-Your current view is attached. Decide what to say and do now.`;
+  const situation = buildSituation(
+    agentDisplayName,
+    validatedSelf.data,
+    validatedHistory.data,
+  );
 
   const contents = [
     {
@@ -252,7 +171,7 @@ Your current view is attached. Decide what to say and do now.`;
   // @google/genai takes model parameters under `config` (the old SDK's
   // top-level `generationConfig` field is silently ignored).
   const config: GenerateContentConfig = {
-    systemInstruction,
+    systemInstruction: agentSystemInstruction,
     temperature: 0.4,
     topP: 0.7,
     topK: 20,
@@ -266,7 +185,7 @@ Your current view is attached. Decide what to say and do now.`;
   };
 
   const request = {
-    model: visionModelConfig.name,
+    model: getActiveVisionModelName(),
     contents,
     config,
   };
@@ -274,7 +193,7 @@ Your current view is attached. Decide what to say and do now.`;
   log.debug("ai.action", "Requesting decision", { agent: agentDisplayName });
 
   try {
-    const genAI = await getGoogleAIClient();
+    const genAI = getGoogleAIClient();
     const result = await retry(() => genAI.models.generateContent(request), {
       attempts: 2,
     });
@@ -310,7 +229,7 @@ Your current view is attached. Decide what to say and do now.`;
 
     if (validatedResponse.data.chatMessage) {
       const aiChatMessage: Message = {
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         userId: aiAgentId,
         name: agentDisplayName,
         text: validatedResponse.data.chatMessage,

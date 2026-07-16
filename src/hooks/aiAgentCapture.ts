@@ -52,35 +52,42 @@ export const captureView = (
   const captureCanvas = getScratchCanvas();
   const context = captureCanvas.getContext("2d");
 
-  if (context) {
-    const imageData = getScratchPixels();
-    gl.readRenderTargetPixels(
-      renderTarget,
-      0,
-      0,
-      CAPTURE_WIDTH,
-      CAPTURE_HEIGHT,
-      imageData,
-    );
-
-    const bytesPerRow = CAPTURE_WIDTH * 4;
-    const halfHeight = CAPTURE_HEIGHT / 2;
-    for (let y = 0; y < halfHeight; ++y) {
-      const topOffset = y * bytesPerRow;
-      const bottomOffset = (CAPTURE_HEIGHT - y - 1) * bytesPerRow;
-      for (let i = 0; i < bytesPerRow; ++i) {
-        const temp = imageData[topOffset + i];
-        imageData[topOffset + i] = imageData[bottomOffset + i];
-        imageData[bottomOffset + i] = temp;
-      }
-    }
-    const imgData = new ImageData(
-      new Uint8ClampedArray(imageData.buffer),
-      CAPTURE_WIDTH,
-      CAPTURE_HEIGHT,
-    );
-    context.putImageData(imgData, 0, 0);
+  // Without a 2D context there is nothing valid to encode — returning the
+  // canvas anyway would send a blank or stale previous frame to Gemini.
+  if (!context) {
+    gl.setRenderTarget(originalRenderTarget);
+    gl.outputColorSpace = originalOutputColorSpace;
+    return null;
   }
+
+  const imageData = getScratchPixels();
+  gl.readRenderTargetPixels(
+    renderTarget,
+    0,
+    0,
+    CAPTURE_WIDTH,
+    CAPTURE_HEIGHT,
+    imageData,
+  );
+
+  const bytesPerRow = CAPTURE_WIDTH * 4;
+  const halfHeight = CAPTURE_HEIGHT / 2;
+  for (let y = 0; y < halfHeight; ++y) {
+    const topOffset = y * bytesPerRow;
+    const bottomOffset = (CAPTURE_HEIGHT - y - 1) * bytesPerRow;
+    for (let i = 0; i < bytesPerRow; ++i) {
+      const temp = imageData[topOffset + i];
+      imageData[topOffset + i] = imageData[bottomOffset + i];
+      imageData[bottomOffset + i] = temp;
+    }
+  }
+  const imgData = new ImageData(
+    new Uint8ClampedArray(imageData.buffer),
+    CAPTURE_WIDTH,
+    CAPTURE_HEIGHT,
+  );
+  context.putImageData(imgData, 0, 0);
+
   const imageDataUrl = captureCanvas.toDataURL("image/jpeg", 0.7);
 
   gl.setRenderTarget(originalRenderTarget);

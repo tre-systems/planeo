@@ -12,6 +12,8 @@
 //
 // In-memory state is exact on a single server (the laptop/self-host case)
 // and best-effort per isolate on Workers — a circuit-breaker, not auth.
+import { parseConfigInt } from "../domain/config";
+
 import type { ActionFailureReason } from "../domain/actionResult";
 
 const AI_RATE_WINDOW_MS = 60 * 60 * 1000;
@@ -27,10 +29,9 @@ export const aiCallBlocked = (
     return "unauthorized";
   }
 
-  const limit = Number.parseInt(
-    process.env["RATE_LIMIT_AI_HOURLY"] || "2000",
-    10,
-  );
+  // parseConfigInt (not parseInt): a malformed value would yield NaN, and
+  // `length >= NaN` is always false — the budget would silently be unlimited.
+  const limit = parseConfigInt(process.env["RATE_LIMIT_AI_HOURLY"], 2000);
   const cutoff = Date.now() - AI_RATE_WINDOW_MS;
   while (aiCallTimes.length > 0 && aiCallTimes[0] < cutoff) {
     aiCallTimes.shift();

@@ -4,7 +4,7 @@ import { BoxEventSchema, BoxUpdatePayloadSchema } from "./box";
 import { Vec3Schema } from "./common";
 import { MessageSchema } from "./message";
 
-export const EyeUpdateSchema = z.object({
+const EyeUpdateSchema = z.object({
   type: z.literal("eyeUpdate"),
   id: z.string().min(1),
   name: z.string().optional(),
@@ -25,7 +25,6 @@ export const HostEventSchema = z.object({
   type: z.literal("host"),
   hostId: z.string(),
 });
-export type HostEventType = z.infer<typeof HostEventSchema>;
 
 export const EventSchema = z.discriminatedUnion("type", [
   EyeUpdateSchema,
@@ -34,7 +33,6 @@ export const EventSchema = z.discriminatedUnion("type", [
   BoxUpdatePayloadSchema,
   HostEventSchema,
 ]);
-export type EventType = z.infer<typeof EventSchema>;
 
 export const ValidatedEyeUpdatePayloadSchema = EyeUpdateSchema.refine(
   (data) => data.p !== undefined || data.l !== undefined,
@@ -43,6 +41,3 @@ export const ValidatedEyeUpdatePayloadSchema = EyeUpdateSchema.refine(
       "Eye update must contain either 'p' (position) or 'l' (lookAt) or both.",
   },
 );
-export type ValidatedEyeUpdatePayloadType = z.infer<
-  typeof ValidatedEyeUpdatePayloadSchema
->;

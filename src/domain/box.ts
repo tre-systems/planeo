@@ -2,15 +2,16 @@ import { z } from "zod";
 
 import { Vec3Schema } from "./common";
 
-export const BoxSchema = z.object({
+// The box state broadcast to clients over SSE.
+export const BoxEventSchema = z.object({
   type: z.literal("box"),
   id: z.string().min(1),
   p: Vec3Schema, // Position
   o: Vec3Schema, // Orientation, as Euler angles
   c: z.string(), // Color, hex string (e.g. "#FF0000")
-  t: z.number(), // Timestamp of last update
+  t: z.number(), // Timestamp of last update (server-stamped)
 });
-export type BoxType = z.infer<typeof BoxSchema>;
+export type BoxEventType = z.infer<typeof BoxEventSchema>;
 
 // The payload a client sends to update a box; the server stamps 't' on
 // receive/broadcast, so it is absent here.
@@ -33,8 +34,3 @@ export const ValidatedBoxUpdatePayloadSchema = BoxUpdatePayloadSchema.refine(
 export type ValidatedBoxUpdatePayloadType = z.infer<
   typeof ValidatedBoxUpdatePayloadSchema
 >;
-
-// The box state broadcast to clients over SSE. Identical to BoxSchema; kept as a
-// named alias so SSE-event call sites can reference the wire shape explicitly.
-export const BoxEventSchema = BoxSchema;
-export type BoxEventType = z.infer<typeof BoxEventSchema>;

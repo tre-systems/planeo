@@ -28,7 +28,6 @@ export const Eyes = () => {
   const managedEyes = useEyesStore((s) => s.managedEyes);
   const updateEyeAnimations = useEyesStore((s) => s.updateEyeAnimations);
 
-  // Ensure refs are created for new eyes and cleaned up for removed eyes
   useEffect(() => {
     const currentKeys = Object.keys(refs.current);
     const managedKeys = Object.keys(managedEyes);
@@ -114,11 +113,8 @@ export const Eyes = () => {
   return (
     <>
       {Object.values(managedEyes).map((eye: ManagedEye) => {
-        // Ref creation is handled in useEffect
         const rigidBodyRef = refs.current[eye.id];
-        // It's possible the ref might not be there yet if managedEyes updated
-        // and this render happens before the useEffect for refs runs,
-        // or if an eye is quickly added and removed.
+        // Render can run before the ref-creating effect; skip this frame's eye.
         if (!rigidBodyRef) return null;
 
         return <Eye key={eye.id} eye={eye} rigidBodyRef={rigidBodyRef} />;

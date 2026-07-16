@@ -27,7 +27,6 @@ let lastClientId: string | undefined;
 
 interface EventStoreState {
   isConnected: boolean;
-  lastError: string | null;
   hostId: string | null;
   eventSourceInstance: EventSource | null;
 }
@@ -35,7 +34,7 @@ interface EventStoreState {
 interface EventStoreActions {
   connect: (myId: string) => void;
   disconnect: () => void;
-  sendBoxUpdate: (boxUpdate: ValidatedBoxUpdatePayloadType) => Promise<void>;
+  sendBoxUpdate: (boxUpdate: ValidatedBoxUpdatePayloadType) => void;
   sendChatMessage: (message: ChatMessageEventType) => Promise<void>;
   _handleMessage: (event: MessageEvent) => void;
   _handleError: (event: Event) => void;
@@ -56,14 +55,10 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
         log.error("sse", "Invalid box update payload before sending", {
           details: parsedPayload.error.flatten(),
         });
-        set({ lastError: "Invalid box update payload formation" });
         return;
       }
 
-      await postWorldEventChecked(parsedPayload.data, {
-        kind: "box update",
-        onError: (lastError) => set({ lastError }),
-      });
+      await postWorldEventChecked(parsedPayload.data, { kind: "box update" });
     };
 
     // One throttle per box id. A single shared throttle would let box B's
@@ -84,7 +79,6 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
 
     return {
       isConnected: false,
-      lastError: null,
       hostId: null,
       eventSourceInstance: null,
 
@@ -94,10 +88,10 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
         const es = new EventSource(
           `/api/events?id=${encodeURIComponent(myId)}`,
         );
-        set({ eventSourceInstance: es, isConnected: false, lastError: null });
+        set({ eventSourceInstance: es, isConnected: false });
 
         es.onopen = () => {
-          set({ isConnected: true, lastError: null });
+          set({ isConnected: true });
         };
         es.onmessage = (event: MessageEvent) => get()._handleMessage(event);
         es.onerror = (event: Event) => get()._handleError(event);
@@ -117,7 +111,9 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
         }
       },
 
-      sendBoxUpdate: async (boxUpdate: ValidatedBoxUpdatePayloadType) => {
+      // Fire-and-forget: the optimistic update is synchronous and the send is
+      // throttled — there is nothing meaningful for a caller to await.
+      sendBoxUpdate: (boxUpdate: ValidatedBoxUpdatePayloadType) => {
         useBoxStore.getState().optimisticallySetBoxState(boxUpdate);
         throttledSendForBox(boxUpdate.id)(boxUpdate);
       },
@@ -133,13 +129,11 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
           log.error("sse", "Invalid chat message payload before sending", {
             details: parsedPayload.error.flatten(),
           });
-          set({ lastError: "Invalid chat message payload formation" });
           return;
         }
 
         await postWorldEventChecked(parsedPayload.data, {
           kind: "chat message",
-          onError: (lastError) => set({ lastError }),
         });
       },
 
@@ -152,7 +146,6 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
             log.error("sse", "Failed to parse event", {
               details: parsedEvent.error.flatten(),
             });
-            set({ lastError: "Failed to parse event data" });
             return;
           }
 
@@ -173,7 +166,6 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
           log.error("sse", "Error processing SSE message", {
             error: String(error),
           });
-          set({ lastError: "Error processing SSE message" });
         }
       },
 
@@ -188,7 +180,6 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
         const es = get().eventSourceInstance;
         const closed = es?.readyState === EventSource.CLOSED;
         set((state) => {
-          state.lastError = "EventSource connection error";
           state.isConnected = false;
           state.hostId = null;
           if (closed) state.eventSourceInstance = null;

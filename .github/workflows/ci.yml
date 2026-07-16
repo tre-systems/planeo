@@ -35,8 +35,6 @@ jobs:
     # `deploy`. The Playwright webServer builds with OpenNext and serves the
     # full Workers runtime on localhost:8787, so no secrets are required.
     timeout-minutes: 20
-    env:
-      CI: true
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6

@@ -2,20 +2,20 @@ import { Grid } from "@react-three/drei";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { Physics } from "@react-three/rapier";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { Vector3 } from "three";
 
 import { EYE_Y_POSITION, GROUND_Y_POSITION } from "@/domain/sceneConstants";
-import { useEventSource, useEyePositionReporting } from "@/hooks";
 import { useAIAgentController } from "@/hooks/useAIAgentController";
+import { useEventSource } from "@/hooks/useEventSource";
+import { useEyePositionReporting } from "@/hooks/useEyePositionReporting";
 import { useCommunicationStore } from "@/stores/communicationStore";
-import { useSimulationStore } from "@/stores/simulationStore";
 import { AIAgentViews } from "@components/AIAgentViews";
 import { ServerDrivenBoxes } from "@components/Box";
 import { Eyes } from "@components/Eyes";
 import { StartOverlay } from "@components/StartOverlay";
 
-// Basic keyboard state
+// Keyboard state, keyed lowercase so WASD works regardless of Shift/CapsLock.
 const useKeyboardControls = () => {
   const keys = useRef<{ [key: string]: boolean }>({});
   useEffect(() => {
@@ -38,9 +38,9 @@ const scratchDirection = new Vector3();
 const scratchRight = new Vector3();
 const WORLD_UP = new Vector3(0, 1, 0);
 
-const CanvasContent = ({ myId, myName }: { myId: string; myName?: string }) => {
+const CanvasContent = ({ myId }: { myId: string }) => {
   const { camera } = useThree();
-  useEyePositionReporting(myId, myName || myId, camera);
+  useEyePositionReporting(myId, myId, camera);
   useAIAgentController(myId);
   const keyboard = useKeyboardControls();
   const isChatInputFocused = useCommunicationStore((s) => s.isChatInputFocused);
@@ -156,8 +156,10 @@ const CanvasContent = ({ myId, myName }: { myId: string; myName?: string }) => {
           intensity={6}
           color={"#fffbe6"}
           castShadow
-          shadow-mapSize-width={8192}
-          shadow-mapSize-height={8192}
+          /* 2048 is plenty for this scene's entity count; the shadow camera
+             spans ±1000, so only raise this if shadows visibly pixelate. */
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
           shadow-bias={-0.001}
           shadow-camera-near={1}
           shadow-camera-far={2000}
@@ -186,13 +188,16 @@ const CanvasContent = ({ myId, myName }: { myId: string; myName?: string }) => {
   );
 };
 
-const Scene = ({ myId, myName }: { myId: string; myName?: string }) => {
-  const isStarted = useSimulationStore((state) => state.isStarted);
+const Scene = ({ myId }: { myId: string }) => {
+  // The start gate exists so the browser's autoplay policy will allow audio
+  // once interaction begins; local state, since only this parent/child pair
+  // ever reads or sets it.
+  const [isStarted, setIsStarted] = useState(false);
 
   useEventSource(myId);
 
   if (!isStarted) {
-    return <StartOverlay />;
+    return <StartOverlay onStart={() => setIsStarted(true)} />;
   }
 
   return (
@@ -206,10 +211,7 @@ const Scene = ({ myId, myName }: { myId: string; myName?: string }) => {
       >
         <color attach="background" args={["#000"]} />
         <Physics>
-          <CanvasContent
-            myId={myId}
-            {...(myName !== undefined && { myName })}
-          />
+          <CanvasContent myId={myId} />
           <ServerDrivenBoxes myId={myId} />
         </Physics>
       </Canvas>

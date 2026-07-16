@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "clear && next dev --turbopack",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
@@ -16,9 +16,9 @@
     "check:diagrams": "node scripts/check-diagrams.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "prettier --write . && next lint --fix --no-cache && npx tsc --noEmit && node scripts/check-diagrams.mjs && vitest run",
-    "verify:ci": "prettier --check . && next lint --no-cache --max-warnings 0 && npx tsc --noEmit && node scripts/check-diagrams.mjs && vitest run",
-    "check": "npm run verify && npx playwright test --reporter=list",
+    "verify": "prettier --write . && next lint --fix --no-cache && tsc --noEmit && node scripts/check-diagrams.mjs && vitest run",
+    "verify:ci": "prettier --check . && next lint --no-cache --max-warnings 0 && tsc --noEmit && node scripts/check-diagrams.mjs && vitest run",
+    "check": "npm run verify && playwright test --reporter=list",
     "deps": "npx npm-check-updates",
     "deps:update": "npx npm-check-updates -u && npm run nuke",
     "nuke": "rm -rf node_modules package-lock.json .next .open-next && npm install",
@@ -39,26 +39,21 @@
     "react-dom": "^19.1.0",
     "server-only": "^0.0.1",
     "three": "^0.176.0",
-    "uuid": "^11.1.0",
     "zod": "^3.25.28",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@playwright/test": "^1.52.0",
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^15.5.19",
-    "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-import": "^2.31.0",
     "npm-check-updates": "^18.0.1",
     "prettier": "^3.5.3",
-    "tailwindcss": "^4",
     "typescript": "^5",
-    "typescript-eslint": "^8.32.1",
     "vitest": "^4.1.8",
     "wrangler": "^4.97.0"
   }

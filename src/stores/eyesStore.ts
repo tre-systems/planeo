@@ -3,14 +3,31 @@ import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
 import { EyeUpdateType } from "@/domain/event";
-import {
-  EyeState,
-  EyeStatus,
-  INITIAL_SCALE,
-  TARGET_SCALE,
-  FADE_DURATION,
-} from "@/domain/eye";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
+
+// Render state for one eye. The Vector3/ShaderMaterial fields are class
+// instances immer does not draft: .copy()/.lerp() mutate them in place,
+// produce no new state, and notify no subscriber — they are only safe to
+// read from frame loops, never through selectors expecting re-renders.
+export type EyeStatus = "appearing" | "visible" | "disappearing";
+
+export interface EyeState {
+  id: string;
+  name?: string | undefined;
+  position: Vector3;
+  targetPosition: Vector3;
+  lookAt: Vector3;
+  targetLookAt: Vector3;
+  opacity: number;
+  scale: number;
+  status: EyeStatus;
+  material: ShaderMaterial;
+  conversationalTargetId?: string | undefined;
+}
+
+export const INITIAL_SCALE = 0.01;
+export const TARGET_SCALE = 1.0;
+export const FADE_DURATION = 1.0;
 
 const CONVERSATION_DISTANCE_THRESHOLD = 5;
 

@@ -1,164 +1,77 @@
 import { useEffect, useRef } from "react";
 import { Vector3 } from "three";
 
-import { ValidatedEyeUpdatePayloadSchema } from "@/domain/event";
-import { EYE_Y_POSITION } from "@/domain/sceneConstants";
+import type { Vec3 } from "@/domain/common";
+import {
+  ValidatedEyeUpdatePayloadSchema,
+  type EyeUpdateType,
+} from "@/domain/event";
 import { postWorldEvent } from "@/lib/eventEgress";
 import { log } from "@/lib/log";
-import { roundVec3, areVec3sEqual } from "@/lib/utils";
 
-import type { EyeUpdateType } from "@/domain";
+import { buildEyeUpdate } from "./eyePositionReport";
+
 import type { Camera } from "@react-three/fiber";
 
 const FORCE_POSITION_UPDATE_INTERVAL_MS = 20000;
 const LOCAL_INTERVAL_MS = 100;
 
+// Polls the camera and reports this client's eye over the wire: rounded
+// change-detection every 100 ms, with a forced keepalive every 20 s so the
+// hub's stale purge never reaps a merely-idle player. The payload rules
+// (rounding, vertical-look nudge, field selection) live in buildEyeUpdate.
 export const useEyePositionReporting = (
   myId: string,
   myName: string | undefined,
   camera: Camera | undefined,
 ) => {
-  const lastSentPositionRef = useRef<[number, number, number] | undefined>(
-    undefined,
+  const lastSentRef = useRef<{ p?: Vec3 | undefined; l?: Vec3 | undefined }>(
+    {},
   );
-  const lastSentLookAtRef = useRef<[number, number, number] | undefined>(
-    undefined,
-  );
-  const forcePositionUpdateCounterRef = useRef(0);
+  const forceCounterRef = useRef(0);
 
   useEffect(() => {
     if (!camera) return;
 
-    const checksPerForcePositionUpdate =
+    const checksPerForceUpdate =
       FORCE_POSITION_UPDATE_INTERVAL_MS / LOCAL_INTERVAL_MS;
-
     const userName = myName || myId;
+    const direction = new Vector3();
 
-    const initialPositionRaw: [number, number, number] = [
-      camera.position.x,
-      EYE_Y_POSITION,
-      camera.position.z,
-    ];
-    const initialPositionRounded = roundVec3(initialPositionRaw);
-
-    const lookAtDirection = new Vector3();
-    camera.getWorldDirection(lookAtDirection);
-
-    // Avoid a lookAt that is co-linear with position on XZ when looking
-    // straight up/down: nudge horizontally and re-normalize.
-    if (
-      Math.abs(lookAtDirection.x) < 0.001 &&
-      Math.abs(lookAtDirection.z) < 0.001
-    ) {
-      lookAtDirection.x = 0.01;
-      lookAtDirection.normalize();
-    }
-
-    const initialLookAtRaw: [number, number, number] = [
-      camera.position.x + lookAtDirection.x,
-      camera.position.y + lookAtDirection.y,
-      camera.position.z + lookAtDirection.z,
-    ];
-    const initialLookAtRounded = roundVec3(initialLookAtRaw);
-
-    const initialPayload: EyeUpdateType = {
-      type: "eyeUpdate",
-      id: myId,
-      name: userName,
-      p: initialPositionRounded,
-      l: initialLookAtRounded,
-      t: Date.now(),
-    };
-    const parsedInitial =
-      ValidatedEyeUpdatePayloadSchema.safeParse(initialPayload);
-    if (!parsedInitial.success) {
-      log.error("sse", "Invalid eye update payload before sending", {
-        details: parsedInitial.error.flatten(),
+    const report = (force: boolean) => {
+      camera.getWorldDirection(direction);
+      const built = buildEyeUpdate({
+        id: myId,
+        name: userName,
+        position: [camera.position.x, camera.position.y, camera.position.z],
+        lookDirection: [direction.x, direction.y, direction.z],
+        last: lastSentRef.current,
+        force,
+        now: Date.now(),
       });
-    } else {
-      postWorldEvent(parsedInitial.data);
-      lastSentPositionRef.current = initialPositionRounded;
-      lastSentLookAtRef.current = initialLookAtRounded;
-      forcePositionUpdateCounterRef.current = 0;
-    }
+      if (!built) return;
+
+      const parsed = ValidatedEyeUpdatePayloadSchema.safeParse(built.payload);
+      if (!parsed.success) {
+        log.error("sse", "Invalid eye update payload before sending", {
+          details: parsed.error.flatten(),
+        });
+        return;
+      }
+      postWorldEvent(parsed.data as EyeUpdateType);
+      if (built.sentP) lastSentRef.current.p = built.sentP;
+      if (built.sentL) lastSentRef.current.l = built.sentL;
+    };
+
+    lastSentRef.current = {};
+    forceCounterRef.current = 0;
+    report(true); // announce immediately on mount/camera change
 
     const intervalId = setInterval(() => {
-      const currentPositionRaw: [number, number, number] = [
-        camera.position.x,
-        camera.position.y,
-        camera.position.z,
-      ];
-      const currentPositionRounded = roundVec3(currentPositionRaw);
-
-      const currentLookAtDirection = new Vector3();
-      camera.getWorldDirection(currentLookAtDirection);
-
-      // Same straight-up/down guard as the initial payload above.
-      if (
-        Math.abs(currentLookAtDirection.x) < 0.001 &&
-        Math.abs(currentLookAtDirection.z) < 0.001
-      ) {
-        currentLookAtDirection.x = 0.01;
-        currentLookAtDirection.normalize();
-      }
-
-      const currentLookAtRaw: [number, number, number] = [
-        camera.position.x + currentLookAtDirection.x,
-        camera.position.y + currentLookAtDirection.y,
-        camera.position.z + currentLookAtDirection.z,
-      ];
-      const currentLookAtRounded = roundVec3(currentLookAtRaw);
-
-      forcePositionUpdateCounterRef.current += 1;
-
-      const positionActuallyChanged = !areVec3sEqual(
-        lastSentPositionRef.current,
-        currentPositionRounded,
-      );
-
-      const lookAtActuallyChanged = !areVec3sEqual(
-        lastSentLookAtRef.current,
-        currentLookAtRounded,
-      );
-
-      const isTimeForForcePositionUpdate =
-        forcePositionUpdateCounterRef.current >= checksPerForcePositionUpdate;
-
-      if (
-        positionActuallyChanged ||
-        lookAtActuallyChanged ||
-        isTimeForForcePositionUpdate
-      ) {
-        const payload: EyeUpdateType = {
-          type: "eyeUpdate",
-          id: myId,
-          name: userName,
-          t: Date.now(),
-        };
-        if (positionActuallyChanged || isTimeForForcePositionUpdate) {
-          payload.p = currentPositionRounded;
-          lastSentPositionRef.current = currentPositionRounded;
-        }
-        if (lookAtActuallyChanged || isTimeForForcePositionUpdate) {
-          payload.l = currentLookAtRounded;
-          lastSentLookAtRef.current = currentLookAtRounded;
-        }
-
-        if (payload.p || payload.l) {
-          const parsed = ValidatedEyeUpdatePayloadSchema.safeParse(payload);
-          if (!parsed.success) {
-            log.error("sse", "Invalid eye update payload before sending", {
-              details: parsed.error.flatten(),
-            });
-          } else {
-            postWorldEvent(parsed.data);
-          }
-        }
-
-        if (isTimeForForcePositionUpdate) {
-          forcePositionUpdateCounterRef.current = 0;
-        }
-      }
+      forceCounterRef.current += 1;
+      const force = forceCounterRef.current >= checksPerForceUpdate;
+      if (force) forceCounterRef.current = 0;
+      report(force);
     }, LOCAL_INTERVAL_MS);
 
     return () => {

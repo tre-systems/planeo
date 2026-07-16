@@ -6,11 +6,14 @@ import { immer } from "zustand/middleware/immer";
 import {
   type BoxEventType,
   type ValidatedBoxUpdatePayloadType,
-} from "@/domain";
+} from "@/domain/box";
 import { log } from "@/lib/log";
 
 enableMapSet(); // Immer needs this to mutate the boxes Map in place.
 
+// The Vector3/Euler fields are class instances immer does not draft: mutations
+// to them are in-place and non-reactive — only safe to read from frame loops,
+// never through selectors expecting re-renders. (Same caveat as eyesStore.)
 export interface AnimatedBoxState {
   id: string;
   // Current animated values, lerped toward the server target each frame.
@@ -21,7 +24,6 @@ export interface AnimatedBoxState {
   targetO: Euler;
   c: string;
   t: number;
-  isInitialized: boolean;
 }
 
 interface BoxStoreState {
@@ -67,7 +69,6 @@ export const useBoxStore = create<BoxStoreState>()(
             targetO: targetOrientation.clone(),
             c: boxData.c,
             t: boxData.t,
-            isInitialized: true,
           });
         }
       });

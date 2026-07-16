@@ -141,7 +141,7 @@ test.describe("API Robustness - POST /api/events", () => {
 });
 
 test.describe("API Robustness - POST /api/events - Chat Message Event", () => {
-  test("should return 400 for missing 'message' in chat event", async ({
+  test("should return 400 for missing 'text' in chat event", async ({
     request,
   }) => {
     const response = await request.post(API_ENDPOINT, {
@@ -149,13 +149,13 @@ test.describe("API Robustness - POST /api/events - Chat Message Event", () => {
         type: "chatMessage",
         id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         userId: "user1",
-        t: Date.now(),
+        timestamp: Date.now(),
       },
     });
     expect(response.status()).toBe(400);
   });
 
-  test("should return 400 for 'message' not a string in chat event", async ({
+  test("should return 400 for 'text' not a string in chat event", async ({
     request,
   }) => {
     const response = await request.post(API_ENDPOINT, {
@@ -190,18 +190,10 @@ test.describe("API Robustness - GET /api/events SSE", () => {
   }) => {
     await page.goto("/"); // Go to a page to establish the SSE connection context
 
-    const sseEvents: string[] = [];
-    page.on("console", (msg) => {
-      if (msg.text().startsWith("SSE event:")) {
-        sseEvents.push(msg.text().substring(10));
-      }
-    });
-
     // Evaluate in browser context to set up SSE
     await page.evaluate((apiUrl) => {
       const eventSource = new EventSource(apiUrl);
       eventSource.onmessage = (event) => {
-        console.log(`SSE event:${event.data}`);
         // Store received data on window for Playwright to access
         (window as TestWindow).sseReceivedData =
           (window as TestWindow).sseReceivedData || [];
@@ -211,8 +203,6 @@ test.describe("API Robustness - GET /api/events SSE", () => {
         console.error("SSE error:", err);
         eventSource.close(); // Close on error to prevent infinite retries in test
       };
-      // Keep the connection open for a short while to allow events to be received
-      // In a real app, this would be managed differently.
       // Store eventSource on window to close it later if needed
       (window as TestWindow).eventSource = eventSource;
     }, API_ENDPOINT);
@@ -253,12 +243,13 @@ test.describe("API Robustness - GET /api/events SSE", () => {
       )
       .catch((e) => {
         console.error("waitForFunction failed:", e);
-        // Log current sseEvents for debugging
-        console.log("Current SSE events captured in Playwright:", sseEvents);
         throw e; // Re-throw to fail the test
       });
 
-    // Further check in Playwright's context if necessary, using the sseEvents array
+    // Read the stash back into Playwright's context and assert on the payload
+    const sseEvents = await page.evaluate(
+      () => (window as TestWindow).sseReceivedData ?? [],
+    );
     const receivedEvent = sseEvents.find((e) => e.includes(testEvent.id));
     expect(receivedEvent).toBeDefined();
     if (receivedEvent) {

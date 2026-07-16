@@ -4,13 +4,18 @@ import { useThree, useFrame } from "@react-three/fiber";
 import { useEffect, useRef, useCallback } from "react";
 import { PerspectiveCamera, WebGLRenderTarget } from "three";
 
-import { requestAiDecision } from "@/app/actions/aiControllerActions";
+import { generateAiActionAndChat } from "@/app/actions/generateMessage";
 import { getAIAgents } from "@/domain/aiAgent";
 import { ValidatedEyeUpdatePayloadSchema } from "@/domain/event";
+import {
+  AGENT_VIEW_WIDTH as CAPTURE_WIDTH,
+  AGENT_VIEW_HEIGHT as CAPTURE_HEIGHT,
+} from "@/domain/realtimeConstants";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
+import { postWorldEvent } from "@/lib/eventEgress";
 import { log } from "@/lib/log";
 import { roundArray } from "@/lib/utils";
-import { postWorldEvent, worldWriteToken } from "@/lib/worldAuth";
+import { worldWriteToken } from "@/lib/worldAuth";
 import { useAIVisionStore } from "@/stores/aiVisionStore";
 import { useCommunicationStore } from "@/stores/communicationStore";
 import { useEventStore } from "@/stores/eventStore";
@@ -27,8 +32,9 @@ const VISUAL_UPDATE_INTERVAL_MS = 100; // For smoother view updates (~10 FPS)
 // the host runs the loop, so it lives here client-side rather than as a
 // server-side sleep in the Gemini action.
 const DECISION_MAKING_INTERVAL_MS = 5000;
-const CAPTURE_WIDTH = 320;
-const CAPTURE_HEIGHT = 200;
+// Extra wait after the server refuses a decision (unauthorized/over budget):
+// refusals are certain to repeat, so back off well past the normal cadence.
+const REFUSAL_BACKOFF_MS = 60_000;
 const MOVEMENT_DISTANCE_MULTIPLIER = 10;
 
 export const useAIAgentController = (myId: string) => {
@@ -140,12 +146,30 @@ export const useAIAgentController = (myId: string) => {
           agentId,
           imageBytes: imageDataUrl.length,
         });
-        const movementAction: AIAction = await requestAiDecision(
+        const decision = await generateAiActionAndChat(
           agentId,
           imageDataUrl,
           chatHistory,
           worldWriteToken(),
         );
+
+        if (!decision.ok) {
+          log.warn("ai.controller", "Decision refused/failed", {
+            agentId,
+            reason: decision.reason,
+          });
+          // A refusal will keep refusing — stop hammering the billable
+          // surface until the situation can have changed.
+          if (
+            decision.reason === "unauthorized" ||
+            decision.reason === "rate-limited"
+          ) {
+            lastDecisionTime.current[agentId] = Date.now() + REFUSAL_BACKOFF_MS;
+          }
+          return;
+        }
+
+        const movementAction: AIAction = decision.value.action;
 
         if (movementAction && movementAction.type !== "none") {
           log.debug("ai.controller", "Executing movement", {
@@ -207,7 +231,11 @@ export const useAIAgentController = (myId: string) => {
           error: String(error),
         });
       } finally {
-        lastDecisionTime.current[agentId] = Date.now();
+        // max() so a refusal backoff set above isn't clobbered back to now.
+        lastDecisionTime.current[agentId] = Math.max(
+          lastDecisionTime.current[agentId] ?? 0,
+          Date.now(),
+        );
         decisionProcessingLock.current.delete(agentId);
       }
     },
@@ -216,7 +244,7 @@ export const useAIAgentController = (myId: string) => {
       messages,
       managedEyes,
       updateAIAgentTarget,
-      // requestAiDecision is a server action, typically stable
+      // generateAiActionAndChat is a server action, typically stable
     ],
   );
 

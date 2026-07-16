@@ -19,6 +19,10 @@ import {
   ValidatedEyeUpdatePayloadSchema,
   type EyeUpdateType,
 } from "../domain/event";
+import {
+  EYE_MAX_AGE_MS,
+  EYE_PURGE_INTERVAL_MS,
+} from "../domain/realtimeConstants";
 import { EYE_Y_POSITION } from "../domain/sceneConstants";
 import { log } from "../lib/log";
 
@@ -35,8 +39,6 @@ import type { Vec3 } from "../domain/common";
 
 const encoder = new TextEncoder();
 
-const PURGE_INTERVAL_MS = 10_000;
-const EYE_MAX_AGE_MS = 30_000;
 // A consumer that stops reading its SSE stream would otherwise buffer every
 // broadcast in DO memory; past this many unacknowledged writes it is dropped.
 const MAX_PENDING_WRITES = 256;
@@ -84,7 +86,7 @@ export class EventHub extends DurableObject<Env> {
   private async scheduleAlarm(): Promise<void> {
     const existing = await this.ctx.storage.getAlarm();
     if (existing === null) {
-      await this.ctx.storage.setAlarm(Date.now() + PURGE_INTERVAL_MS);
+      await this.ctx.storage.setAlarm(Date.now() + EYE_PURGE_INTERVAL_MS);
     }
   }
 

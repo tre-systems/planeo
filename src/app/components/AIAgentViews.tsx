@@ -4,6 +4,10 @@ import Image from "next/image";
 import React from "react";
 
 import { getAIAgents } from "@/domain/aiAgent";
+import {
+  AGENT_VIEW_WIDTH,
+  AGENT_VIEW_HEIGHT,
+} from "@/domain/realtimeConstants";
 import { useAIVisionStore } from "@/stores/aiVisionStore";
 
 const MAX_AI_VIEWS = 2;
@@ -29,8 +33,8 @@ export const AIAgentViews = () => {
     viewWrapper: {
       position: "fixed",
       top: "10px",
-      width: "160px", // half of CAPTURE_WIDTH (320)
-      height: "100px", // half of CAPTURE_HEIGHT (200)
+      width: `${AGENT_VIEW_WIDTH / 2}px`,
+      height: `${AGENT_VIEW_HEIGHT / 2}px`,
       border: "1px solid lime",
       backgroundColor: "rgba(0, 0, 0, 0.7)",
       padding: "0px",

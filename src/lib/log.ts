@@ -4,6 +4,11 @@
 
 type Level = "debug" | "info" | "warn" | "error";
 
+// Debug lines are development-only chatter (per-decision, per-subscriber);
+// keep them out of production consoles and Workers observability. NODE_ENV is
+// inlined at build time in the client bundle, so the check costs nothing.
+const debugEnabled = process.env.NODE_ENV !== "production";
+
 const emit = (
   level: Level,
   scope: string,
@@ -17,8 +22,9 @@ const emit = (
 };
 
 export const log = {
-  debug: (scope: string, message: string, fields?: Record<string, unknown>) =>
-    emit("debug", scope, message, fields),
+  debug: (scope: string, message: string, fields?: Record<string, unknown>) => {
+    if (debugEnabled) emit("debug", scope, message, fields);
+  },
   info: (scope: string, message: string, fields?: Record<string, unknown>) =>
     emit("info", scope, message, fields),
   warn: (scope: string, message: string, fields?: Record<string, unknown>) =>

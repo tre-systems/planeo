@@ -1,9 +1,11 @@
 import { LinearSRGBColorSpace } from "three";
 
-import type { Camera, Scene, WebGLRenderer, WebGLRenderTarget } from "three";
+import {
+  AGENT_VIEW_WIDTH as CAPTURE_WIDTH,
+  AGENT_VIEW_HEIGHT as CAPTURE_HEIGHT,
+} from "@/domain/realtimeConstants";
 
-const CAPTURE_WIDTH = 320;
-const CAPTURE_HEIGHT = 200;
+import type { Camera, Scene, WebGLRenderer, WebGLRenderTarget } from "three";
 
 // Captures run ~10×/s per agent on the host's frame loop, so the canvas and
 // pixel buffer are allocated once and reused (captures are synchronous and

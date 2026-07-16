@@ -19,6 +19,25 @@ is already a tracked, deliberate quirk. The patterns the code follows are in
   is `true` (currently unset). The `planeo.tre.systems` custom domain is already
   configured in `wrangler.jsonc` and takes effect once deploy is re-enabled.
 
+## Pattern consistency & gaps
+
+Where the code does not yet follow the named patterns in
+[`ARCHITECTURE.md`](../ARCHITECTURE.md#patterns) consistently — fix these
+opportunistically when touching the files:
+
+- **Functional-core extraction pockets.** Three chunks of pure logic are inline
+  and untested: the conversation-pairing algorithm in `eyesStore.syncEyes`,
+  the near-duplicated payload building between the initial and interval paths
+  in `useEyePositionReporting` (a pure `buildEyeUpdate(camera, last, force)`
+  would deduplicate and test it), and `throttle` in `lib/utils.ts` (subtle
+  trailing-edge/promise semantics, no unit test while `retry` has one).
+- **`AI_AGENTS_CONFIG` doesn't reach client bundles.** It is not `NEXT_PUBLIC_`,
+  so `getAIAgents()` in the browser always returns the Orion/Nova defaults
+  while the DO honors the var — a custom config would desync client-side agent
+  identity from the DO's seeds. Harmless today (the var is unset); rename to
+  `NEXT_PUBLIC_AI_AGENTS_CONFIG` (or split server/client config) before
+  configuring custom agents.
+
 ## Outstanding work
 
 Prioritised, P1 (highest value) → P3. None are known bugs in shipped behavior.

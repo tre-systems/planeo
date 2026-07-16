@@ -55,11 +55,16 @@ export const useAiChat = (myId: string) => {
           agentId: respondingAgentId,
         });
         try {
-          await generateAiChatMessage(
+          const result = await generateAiChatMessage(
             messagesRef.current.slice(-10),
             respondingAgentId,
             worldWriteToken(),
           );
+          if (!result.ok) {
+            log.warn("ai.chat", "AI reply refused/failed", {
+              reason: result.reason,
+            });
+          }
         } catch (error) {
           log.error("ai.chat", "Error getting AI response", {
             error: String(error),

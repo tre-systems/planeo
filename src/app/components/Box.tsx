@@ -21,6 +21,15 @@ import { useEventStore } from "../../stores/eventStore";
 const POSITION_THRESHOLD = 0.1;
 const ROTATION_THRESHOLD = 0.05;
 
+// Scratch objects reused by the host's per-frame pose check (synchronous
+// loop, so sharing is safe) — handleUpdate runs for every box every frame.
+const scratchNewPosition = new THREE.Vector3();
+const scratchLastPosition = new THREE.Vector3();
+const scratchQuaternion = new THREE.Quaternion();
+const scratchNewQuaternion = new THREE.Quaternion();
+const scratchLastQuaternion = new THREE.Quaternion();
+const scratchEuler = new THREE.Euler();
+
 // Predefined list of art image URLs from The Metropolitan Museum of Art Open Access
 const artImageUrls = [
   "/art/image_1.jpg",
@@ -73,36 +82,34 @@ const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box, isHost }) => {
         currentPositionVec3.y,
         currentPositionVec3.z,
       ];
-      const threeQuatFromRapier = new THREE.Quaternion(
+      scratchQuaternion.set(
         currentRotationRapier.x,
         currentRotationRapier.y,
         currentRotationRapier.z,
         currentRotationRapier.w,
       );
-      const euler = new THREE.Euler().setFromQuaternion(
-        threeQuatFromRapier,
-        "XYZ",
-      );
-      const newRawO: Vec3 = [euler.x, euler.y, euler.z];
+      scratchEuler.setFromQuaternion(scratchQuaternion, "XYZ");
+      const newRawO: Vec3 = [scratchEuler.x, scratchEuler.y, scratchEuler.z];
 
       const lastP = lastTransmittedPRef.current;
       const lastO = lastTransmittedORef.current;
 
       const positionChanged =
         !lastP ||
-        new THREE.Vector3(...newRawP).distanceTo(new THREE.Vector3(...lastP)) >
-          POSITION_THRESHOLD;
+        scratchNewPosition
+          .set(...newRawP)
+          .distanceTo(scratchLastPosition.set(...lastP)) > POSITION_THRESHOLD;
 
-      const newQuatForComparison = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(...newRawO),
-      );
-      const lastQuatForComparison = lastO
-        ? new THREE.Quaternion().setFromEuler(new THREE.Euler(...lastO))
-        : new THREE.Quaternion();
+      scratchNewQuaternion.setFromEuler(scratchEuler.set(...newRawO));
+      if (lastO) {
+        scratchLastQuaternion.setFromEuler(scratchEuler.set(...lastO));
+      } else {
+        scratchLastQuaternion.identity();
+      }
 
       const rotationChanged =
         !lastO ||
-        newQuatForComparison.angleTo(lastQuatForComparison) >
+        scratchNewQuaternion.angleTo(scratchLastQuaternion) >
           ROTATION_THRESHOLD;
 
       if (positionChanged || rotationChanged) {
@@ -163,7 +170,7 @@ const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box, isHost }) => {
         y: box.currentP.y,
         z: box.currentP.z,
       });
-      const q = new THREE.Quaternion().setFromEuler(box.currentO);
+      const q = scratchQuaternion.setFromEuler(box.currentO);
       rb.setNextKinematicRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
     }
   });

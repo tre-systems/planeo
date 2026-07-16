@@ -17,24 +17,3 @@ export const worldWriteHeaders = (): Record<string, string> => {
   const token = worldWriteToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
-
-// Fire-and-forget POST of an already-validated event to /api/events.
-// sendBeacon survives page unload but cannot carry the Authorization header,
-// so it is only used when the world has no write token; otherwise fall back to
-// a keepalive fetch that presents the token.
-export const postWorldEvent = (
-  payload: unknown,
-  onError?: (error: unknown) => void,
-): void => {
-  const body = JSON.stringify(payload);
-  if (!worldWriteToken() && navigator.sendBeacon) {
-    navigator.sendBeacon("/api/events", body);
-    return;
-  }
-  fetch("/api/events", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...worldWriteHeaders() },
-    body,
-    keepalive: true,
-  }).catch((error) => onError?.(error));
-};

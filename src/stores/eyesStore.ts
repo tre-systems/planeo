@@ -144,11 +144,16 @@ export const useEyesStore = create<EyesState & EyesActions>()(
 
     updateEyeAnimations: (delta) =>
       set((state) => {
+        // Scale by delta*60 so the visual speed matches the base factor at
+        // 60 FPS regardless of actual frame rate (same normalization as
+        // boxStore.updateBoxAnimations).
+        const lerpFactor = Math.min(0.05 * delta * 60, 1);
+
         for (const id in state.managedEyes) {
           const eye = state.managedEyes[id];
 
           if (!eye.position.equals(eye.targetPosition)) {
-            eye.position.lerp(eye.targetPosition, 0.05);
+            eye.position.lerp(eye.targetPosition, lerpFactor);
             eye.position.y = EYE_Y_POSITION;
           }
 
@@ -164,7 +169,7 @@ export const useEyesStore = create<EyesState & EyesActions>()(
           }
 
           if (!eye.lookAt.equals(eye.targetLookAt)) {
-            eye.lookAt.lerp(eye.targetLookAt, 0.05);
+            eye.lookAt.lerp(eye.targetLookAt, lerpFactor);
           }
 
           if (eye.status === "appearing") {

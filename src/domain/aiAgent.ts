@@ -17,3 +17,15 @@ export const isAIAgentId = (userId: string): boolean =>
 
 export const getAIAgentById = (userId: string): AIAgent | undefined =>
   getAIAgents().find((agent) => agent.id === userId);
+
+// The one display-name fallback chain for a message sender: explicit name,
+// else the agent's configured displayName, else the raw user id. Every
+// prompt-builder and UI label uses this so the chains can't drift apart.
+export const senderDisplayName = (msg: {
+  userId: string;
+  name?: string | undefined;
+}): string =>
+  msg.name ||
+  (isAIAgentId(msg.userId)
+    ? getAIAgentById(msg.userId)?.displayName || msg.userId
+    : msg.userId);

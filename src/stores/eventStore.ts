@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
-import { type BoxEventType } from "@/domain";
 import {
   BoxUpdatePayloadSchema,
   type ValidatedBoxUpdatePayloadType,
@@ -11,75 +10,31 @@ import {
   ChatMessageEventType,
   ChatMessageEventSchema,
 } from "@/domain/event";
+import { postWorldEventChecked } from "@/lib/eventEgress";
 import { exposeStoreForDebug } from "@/lib/exposeStore";
 import { log } from "@/lib/log";
 import { throttle } from "@/lib/utils";
-import { worldWriteHeaders } from "@/lib/worldAuth";
 
 import { useBoxStore } from "./boxStore";
+import { useCommunicationStore } from "./communicationStore";
 import { useRawEyeEventStore } from "./rawEyeEventStore";
-
-// Define listener types
-type ChatMessageEventListener = (event: ChatMessageEventType) => void;
-type BoxEventListener = (event: BoxEventType) => void;
 
 // Delay before rebuilding a CLOSED EventSource (one that gave up retrying).
 const RECONNECT_DELAY_MS = 3000;
-// The id used for the current connection, kept for reconnects.
+// The id used for the current connection: reconnects reuse it, and inbound
+// chat is filtered against it so our own echoed messages aren't re-added.
 let lastClientId: string | undefined;
-
-// Shared egress for the POST /api/events senders: the box-update and chat
-// senders share an identical fetch → ok-check → catch shape, differing only in
-// the human-readable `kind` woven into log lines and `lastError`. `setLastError`
-// is passed in so the helper can stay outside the store closure.
-const postEvent = async (
-  parsedData: unknown,
-  { kind, setLastError }: { kind: string; setLastError: (msg: string) => void },
-): Promise<void> => {
-  try {
-    const response = await fetch("/api/events", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...worldWriteHeaders(),
-      },
-      body: JSON.stringify(parsedData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      log.error("sse", `Failed to send ${kind} to server`, {
-        status: response.status,
-        body: errorData,
-      });
-      setLastError(`Server error sending ${kind}: ${response.status}`);
-    }
-  } catch (error) {
-    log.error("sse", `Network error sending ${kind}`, {
-      error: String(error),
-    });
-    setLastError(`Network error sending ${kind}`);
-  }
-};
 
 interface EventStoreState {
   isConnected: boolean;
   lastError: string | null;
   hostId: string | null;
   eventSourceInstance: EventSource | null;
-  listeners: {
-    chatMessage: ChatMessageEventListener[];
-    box: BoxEventListener[];
-  };
 }
 
 interface EventStoreActions {
   connect: (myId: string) => void;
   disconnect: () => void;
-  subscribeChatMessageEvents: (
-    callback: ChatMessageEventListener,
-  ) => () => void;
-  subscribeBoxEvents: (callback: BoxEventListener) => () => void;
   sendBoxUpdate: (boxUpdate: ValidatedBoxUpdatePayloadType) => Promise<void>;
   sendChatMessage: (message: ChatMessageEventType) => Promise<void>;
   _handleMessage: (event: MessageEvent) => void;
@@ -105,9 +60,9 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
         return;
       }
 
-      await postEvent(parsedPayload.data, {
+      await postWorldEventChecked(parsedPayload.data, {
         kind: "box update",
-        setLastError: (lastError) => set({ lastError }),
+        onError: (lastError) => set({ lastError }),
       });
     };
 
@@ -132,10 +87,6 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
       lastError: null,
       hostId: null,
       eventSourceInstance: null,
-      listeners: {
-        chatMessage: [],
-        box: [],
-      },
 
       connect: (myId: string) => {
         if (get().eventSourceInstance || get().isConnected) return;
@@ -166,32 +117,6 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
         }
       },
 
-      subscribeChatMessageEvents: (callback: ChatMessageEventListener) => {
-        set((state) => {
-          state.listeners.chatMessage.push(callback);
-        });
-        return () => {
-          set((state) => {
-            state.listeners.chatMessage = state.listeners.chatMessage.filter(
-              (cb) => cb !== callback,
-            );
-          });
-        };
-      },
-
-      subscribeBoxEvents: (callback: BoxEventListener) => {
-        set((state) => {
-          state.listeners.box.push(callback);
-        });
-        return () => {
-          set((state) => {
-            state.listeners.box = state.listeners.box.filter(
-              (cb) => cb !== callback,
-            );
-          });
-        };
-      },
-
       sendBoxUpdate: async (boxUpdate: ValidatedBoxUpdatePayloadType) => {
         useBoxStore.getState().optimisticallySetBoxState(boxUpdate);
         throttledSendForBox(boxUpdate.id)(boxUpdate);
@@ -212,12 +137,14 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
           return;
         }
 
-        await postEvent(parsedPayload.data, {
+        await postWorldEventChecked(parsedPayload.data, {
           kind: "chat message",
-          setLastError: (lastError) => set({ lastError }),
+          onError: (lastError) => set({ lastError }),
         });
       },
 
+      // Direct fan-out: each event type goes straight to the store that owns
+      // it. `data` is already narrowed by the discriminated union — no casts.
       _handleMessage: (event: MessageEvent) => {
         try {
           const parsedEvent = EventSchema.safeParse(JSON.parse(event.data));
@@ -229,17 +156,16 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
             return;
           }
 
-          // `data` is already narrowed by the discriminated union — no casts.
-          // Copy the listener array so a listener can unsubscribe mid-dispatch.
           const data = parsedEvent.data;
           if (data.type === "eyeUpdate") {
             useRawEyeEventStore.getState().setEye(data);
           } else if (data.type === "chatMessage") {
-            [...get().listeners.chatMessage].forEach((callback) =>
-              callback(data),
-            );
+            // Our own messages were added locally on send; skip the echo.
+            if (data.userId !== lastClientId) {
+              useCommunicationStore.getState().addMessage(data);
+            }
           } else if (data.type === "box") {
-            [...get().listeners.box].forEach((callback) => callback(data));
+            useBoxStore.getState().handleBoxEvent(data);
           } else if (data.type === "host") {
             set({ hostId: data.hostId });
           }
@@ -256,9 +182,9 @@ export const useEventStore = create<EventStoreState & EventStoreActions>()(
         // Keep the instance: EventSource reconnects by itself and onopen will
         // flip isConnected back. Only a CLOSED source is done for good — drop
         // it and retry with a fresh one. hostId is cleared either way so a
-        // disconnected ex-host stops driving agents (and double-billing Gemini)
-        // off a stale election; the stream replays the current host on
-        // (re)connect.
+        // disconnected ex-host stops driving agents (and double-billing
+        // Gemini) off a stale election; the stream replays the current host
+        // on (re)connect.
         const es = get().eventSourceInstance;
         const closed = es?.readyState === EventSource.CLOSED;
         set((state) => {

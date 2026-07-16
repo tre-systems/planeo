@@ -1,12 +1,14 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
-import { type Vec3 } from "@/domain";
 import { EyeUpdateType } from "@/domain/event";
 import { exposeStoreForDebug } from "@/lib/exposeStore";
 
+// Derived from the wire schema so the record can't drift from EyeUpdateType.
+type RawEyeRecord = Omit<EyeUpdateType, "type" | "id">;
+
 export interface RawEyeEventState {
-  eyes: Record<string, { p?: Vec3; l?: Vec3; name?: string; t: number }>;
+  eyes: Record<string, RawEyeRecord>;
 }
 
 interface RawEyeEventActions {
@@ -25,7 +27,7 @@ export const useRawEyeEventStore = create<
           // Merge over the existing record so a partial update (e.g. lookAt
           // only) keeps the previously known position and name.
           const existing = state.eyes[eyeUpdate.id];
-          const newEyeData: { p?: Vec3; l?: Vec3; name?: string; t: number } = {
+          const newEyeData: RawEyeRecord = {
             t: eyeUpdate.t,
           };
           const p = eyeUpdate.p ?? existing?.p;

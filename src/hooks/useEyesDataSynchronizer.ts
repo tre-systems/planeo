@@ -4,11 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { TextureLoader, ShaderMaterial, Texture } from "three";
 
 import { EyeUpdateType } from "@/domain/event";
+import {
+  EYE_MAX_AGE_MS,
+  EYE_PURGE_INTERVAL_MS,
+} from "@/domain/realtimeConstants";
 import { log } from "@/lib/log";
 import { useEyesStore } from "@/stores/eyesStore";
 import { useRawEyeEventStore } from "@/stores/rawEyeEventStore";
 
-// Shader/texture for the eye material; duplicated in Eyes.tsx.
+// Shader/texture for the eye material (cloned per eye in eyesStore.syncEyes).
 const EYE_TEXTURE_PATH = "/eye.jpg";
 
 const vertexShader = `
@@ -32,12 +36,6 @@ const fragmentShader = `
     gl_FragColor = vec4(color, uOpacity);
   }
 `;
-
-// Matches the server's PURGE_INTERVAL_MS / EYE_MAX_AGE_MS (eventHub.ts): the
-// DO purges stale eyes silently (no removal event is broadcast), so each
-// client must run the same sweep or departed users' eyes float forever.
-const EYE_PURGE_INTERVAL_MS = 10_000;
-const EYE_MAX_AGE_MS = 30_000;
 
 export const useEyesDataSynchronizer = (myId: string) => {
   const rawEyesData = useRawEyeEventStore((state) => state.eyes);

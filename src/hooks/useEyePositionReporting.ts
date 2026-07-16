@@ -3,9 +3,9 @@ import { Vector3 } from "three";
 
 import { ValidatedEyeUpdatePayloadSchema } from "@/domain/event";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
+import { postWorldEvent } from "@/lib/eventEgress";
 import { log } from "@/lib/log";
 import { roundVec3, areVec3sEqual } from "@/lib/utils";
-import { postWorldEvent } from "@/lib/worldAuth";
 
 import type { EyeUpdateType } from "@/domain";
 import type { Camera } from "@react-three/fiber";

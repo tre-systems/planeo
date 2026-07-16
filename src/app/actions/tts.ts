@@ -2,6 +2,11 @@
 
 import { z } from "zod";
 
+import {
+  actionError,
+  actionOk,
+  type ActionResult,
+} from "@/domain/actionResult";
 import { getGoogleAccessToken } from "@/lib/googleAuth";
 import { log } from "@/lib/log";
 import { retry } from "@/lib/retry";
@@ -49,10 +54,7 @@ const SynthesizeSpeechParamsSchema = z.object({
 
 type SynthesizeSpeechParams = z.infer<typeof SynthesizeSpeechParamsSchema>;
 
-export interface SynthesizeSpeechResult {
-  audioBase64?: string;
-  error?: string;
-}
+export type SynthesizeSpeechResult = ActionResult<{ audioBase64: string }>;
 
 // Deterministically map a userId to a voice so each speaker is consistent.
 const getVoiceForUser = (userId: string): string => {
@@ -99,12 +101,10 @@ const performSynthesis = async (
       },
       { attempts: 2 },
     );
-    return { audioBase64: audioContent };
+    return actionOk({ audioBase64: audioContent });
   } catch (error) {
     log.error("tts", "Synthesis error", { error: String(error) });
-    return {
-      error: error instanceof Error ? error.message : "TTS synthesis failed.",
-    };
+    return actionError("unavailable");
   }
 };
 
@@ -135,7 +135,7 @@ export const synthesizeSpeechAction = async (
 ): Promise<SynthesizeSpeechResult> => {
   const ttsEnabled = process.env["NEXT_PUBLIC_TTS_ENABLED"] !== "false";
   if (!ttsEnabled) {
-    return { audioBase64: "", error: "TTS is disabled." };
+    return actionError("unavailable");
   }
 
   const validationResult = SynthesizeSpeechParamsSchema.safeParse(params);
@@ -143,13 +143,13 @@ export const synthesizeSpeechAction = async (
     log.warn("tts", "Invalid parameters", {
       details: validationResult.error.flatten(),
     });
-    return { error: "Invalid parameters." };
+    return actionError("invalid-input");
   }
 
   // Only a valid request may consume a budget slot.
   if (ttsRateLimited()) {
     log.warn("tts", "Hourly TTS rate limit reached; skipping synthesis");
-    return { error: "TTS rate limit reached." };
+    return actionError("rate-limited");
   }
 
   const { text, userId, voiceName: preferredVoiceName } = validationResult.data;

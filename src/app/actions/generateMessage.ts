@@ -5,10 +5,15 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 
+import {
+  actionError,
+  actionOk,
+  type ActionResult,
+} from "@/domain/actionResult";
 import { AIResponseSchema, type ParsedAIResponse } from "@/domain/aiAction";
-import { isAIAgentId, getAIAgentById } from "@/domain/aiAgent";
+import { getAIAgentById, senderDisplayName } from "@/domain/aiAgent";
 import { Message, MessageSchema } from "@/domain/message";
-import { aiCallBlocked } from "@/lib/aiGuard";
+import { agentDecisionTooSoon, aiCallBlocked } from "@/lib/aiGuard";
 import {
   getGoogleAIClient,
   getActiveVisionModel,
@@ -55,32 +60,24 @@ export const generateAiChatMessage = async (
   chatHistory: ChatHistory,
   aiUserId: string,
   writeToken?: string,
-): Promise<Message | undefined> => {
+): Promise<ActionResult<Message>> => {
   const blocked = aiCallBlocked(writeToken);
   if (blocked) {
     log.warn("ai.chat", "Refusing AI chat call", { reason: blocked });
-    return undefined;
+    return actionError(blocked);
   }
 
   const validated = ChatHistorySchema.safeParse(chatHistory);
   if (!validated.success || !aiUserId) {
     log.warn("ai.chat", "Invalid input to generateAiChatMessage");
-    return undefined;
+    return actionError("invalid-input");
   }
 
-  const agent = getAIAgentById(aiUserId);
-  const agentName = agent?.displayName || aiUserId;
+  const agentName = senderDisplayName({ userId: aiUserId });
 
   const prompt =
     validated.data
-      .map((msg) => {
-        const senderName =
-          msg.name ||
-          (isAIAgentId(msg.userId)
-            ? getAIAgentById(msg.userId)?.displayName || "AI"
-            : "User");
-        return `${senderName}: ${msg.text}`;
-      })
+      .map((msg) => `${senderDisplayName(msg)}: ${msg.text}`)
       .join("\n") + `\n${agentName}:`;
 
   try {
@@ -95,16 +92,16 @@ export const generateAiChatMessage = async (
         timestamp: Date.now(),
       };
       await postChatMessageToEvents(aiMessage);
-      return aiMessage;
+      return actionOk(aiMessage);
     }
     log.info("ai.chat", "No response", { agent: agentName });
-    return undefined;
+    return actionError("unavailable");
   } catch (error) {
     log.error("ai.chat", "Error generating message", {
       agent: agentName,
       error: error instanceof Error ? error.stack : String(error),
     });
-    return undefined;
+    return actionError("unavailable");
   }
 };
 
@@ -113,11 +110,18 @@ export const generateAiActionAndChat = async (
   imageDataUrl: string,
   chatHistory: ChatHistory,
   writeToken?: string,
-): Promise<ParsedAIResponse | undefined> => {
+): Promise<ActionResult<ParsedAIResponse>> => {
   const blocked = aiCallBlocked(writeToken);
   if (blocked) {
     log.warn("ai.action", "Refusing AI decision call", { reason: blocked });
-    return undefined;
+    return actionError(blocked);
+  }
+
+  if (agentDecisionTooSoon(aiAgentId)) {
+    log.warn("ai.action", "Refusing AI decision call: too soon", {
+      agent: aiAgentId,
+    });
+    return actionError("rate-limited");
   }
 
   const validatedHistory = ChatHistorySchema.safeParse(chatHistory);
@@ -127,7 +131,7 @@ export const generateAiActionAndChat = async (
     !validatedHistory.success
   ) {
     log.warn("ai.action", "Invalid input to generateAiActionAndChat");
-    return undefined;
+    return actionError("invalid-input");
   }
 
   const agent = getAIAgentById(aiAgentId);
@@ -139,7 +143,7 @@ export const generateAiActionAndChat = async (
     log.warn("ai.action", "Invalid image data URL format", {
       agent: agentDisplayName,
     });
-    return undefined;
+    return actionError("invalid-input");
   }
 
   const systemPrompt = `You awaken with no prior memories of who you are or how you got here. 
@@ -151,15 +155,8 @@ You are provided with an image of your current view.
 
 This is what has been said by you and others:
 Chat History (SenderName: MessageText):
-${chatHistory
-  .map((msg) => {
-    const senderName =
-      msg.name ||
-      (isAIAgentId(msg.userId)
-        ? getAIAgentById(msg.userId)?.displayName || msg.userId
-        : "User");
-    return `${senderName}: ${msg.text}`;
-  })
+${validatedHistory.data
+  .map((msg) => `${senderDisplayName(msg)}: ${msg.text}`)
   .join("\n")}
 
 You think you might be called ${agentDisplayName}
@@ -236,7 +233,7 @@ Your response:`;
 
     if (!aiResponseText || !aiResponseText.trim()) {
       log.warn("ai.action", "Empty response", { agent: agentDisplayName });
-      return undefined;
+      return actionError("unavailable");
     }
 
     let jsonToParse = aiResponseText.trim();
@@ -255,7 +252,7 @@ Your response:`;
         error: String(jsonParseError),
         raw: aiResponseText,
       });
-      return undefined;
+      return actionError("unavailable");
     }
 
     const validatedResponse = AIResponseSchema.safeParse(parsedJson);
@@ -264,7 +261,7 @@ Your response:`;
         agent: agentDisplayName,
         details: validatedResponse.error.flatten(),
       });
-      return undefined;
+      return actionError("unavailable");
     }
 
     if (validatedResponse.data.chatMessage) {
@@ -278,12 +275,12 @@ Your response:`;
       await postChatMessageToEvents(aiChatMessage);
     }
 
-    return validatedResponse.data;
+    return actionOk(validatedResponse.data);
   } catch (error) {
     log.error("ai.action", "Error generating AI response", {
       agent: agentDisplayName,
       error: error instanceof Error ? error.stack : String(error),
     });
-    return undefined;
+    return actionError("unavailable");
   }
 };

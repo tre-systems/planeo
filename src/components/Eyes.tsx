@@ -1,4 +1,3 @@
-"use client";
 import { useFrame } from "@react-three/fiber";
 import { type RapierRigidBody } from "@react-three/rapier";
 import React, { useRef, useEffect } from "react";

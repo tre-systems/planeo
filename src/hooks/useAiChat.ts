@@ -1,9 +1,7 @@
-"use client";
-
 import { useEffect, useRef } from "react";
 
-import { generateAiChatMessage } from "@/app/actions/generateMessage";
 import { getAIAgents, isAIAgentId } from "@/domain/aiAgent";
+import { generateAiChatMessage } from "@/lib/aiClient";
 import { log } from "@/lib/log";
 import { worldWriteToken } from "@/lib/worldAuth";
 import { useCommunicationStore } from "@/stores/communicationStore";

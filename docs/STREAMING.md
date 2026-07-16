@@ -26,7 +26,8 @@ no public write access, no per-viewer hosting cost.
 ## Write token: streamers write, spectators watch
 
 Set `WORLD_WRITE_TOKEN` (Worker secret or `.dev.vars`) and build the host
-client with the same value in `NEXT_PUBLIC_WORLD_WRITE_TOKEN`. Posting events
+client with the same value in `VITE_WORLD_WRITE_TOKEN` (in `.env.local`, or
+the shell at `vite build`). Posting events
 then requires the token; anyone else who reaches the world only gets the
 read-only SSE stream. Leave both unset for private local play.
 
@@ -38,7 +39,7 @@ read-only SSE stream. Leave both unset for private local play.
   `TOTAL_AGENTS` and inversely with the decision interval.
 - `RATE_LIMIT_AI_HOURLY` (default 2000) caps billable Gemini calls per rolling
   hour, and `RATE_LIMIT_TTS_HOURLY` (default 240) does the same for TTS
-  synthesis. With `WORLD_WRITE_TOKEN` set, the AI actions also refuse callers
+  synthesis. With `WORLD_WRITE_TOKEN` set, the AI routes also refuse callers
   without the token.
 - Stream in scheduled blocks rather than 24/7; close the host tab and the
   agent loop stops with it.

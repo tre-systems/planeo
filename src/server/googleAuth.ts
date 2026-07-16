@@ -1,11 +1,8 @@
-// Server-only helper — NOT a "use server" module. A "use server" directive
-// here would publish getGoogleAccessToken as an anonymous public server-action
-// endpoint handing out the service account's OAuth token.
-import "server-only";
-
+// Server-only: bundled into the Worker by Wrangler, never by Vite. This
+// mints the service-account OAuth token — it must never reach a client path.
 import { z } from "zod";
 
-import { retry } from "./retry";
+import { retry } from "../lib/retry";
 
 // Mints a Google Cloud OAuth2 access token from a service-account key using the
 // Web Crypto API (RS256), so it works on the Cloudflare Workers runtime (the

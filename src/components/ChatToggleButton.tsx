@@ -1,5 +1,3 @@
-"use client";
-
 import { useShallow } from "zustand/react/shallow";
 
 import { useCommunicationStore } from "@/stores/communicationStore";

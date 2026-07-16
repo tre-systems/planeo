@@ -1,5 +1,3 @@
-"use client";
-
 import { Box, useTexture } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import {
@@ -14,9 +12,8 @@ import { type ValidatedBoxUpdatePayloadType } from "@/domain/box";
 import { type Vec3 } from "@/domain/common";
 import { GROUND_Y_POSITION } from "@/domain/sceneConstants";
 import { roundArray } from "@/lib/utils";
-
-import { useBoxStore, type AnimatedBoxState } from "../../stores/boxStore";
-import { useEventStore } from "../../stores/eventStore";
+import { useBoxStore, type AnimatedBoxState } from "@/stores/boxStore";
+import { useEventStore } from "@/stores/eventStore";
 
 const POSITION_THRESHOLD = 0.1;
 const ROTATION_THRESHOLD = 0.05;

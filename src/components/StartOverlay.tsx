@@ -1,5 +1,3 @@
-"use client";
-
 export const StartOverlay = ({ onStart }: { onStart: () => void }) => {
   return (
     <div

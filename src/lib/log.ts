@@ -5,8 +5,9 @@
 type Level = "debug" | "info" | "warn" | "error";
 
 // Debug lines are development-only chatter (per-decision, per-subscriber);
-// keep them out of production consoles and Workers observability. NODE_ENV is
-// inlined at build time in the client bundle, so the check costs nothing.
+// keep them out of production consoles and Workers observability. Must stay
+// dot-notation: Vite statically replaces exactly `process.env.NODE_ENV` in
+// the client bundle (bracket access would crash — no `process` in browsers).
 const debugEnabled = process.env.NODE_ENV !== "production";
 
 const emit = (

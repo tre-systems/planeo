@@ -19,10 +19,10 @@ export default defineConfig({
   ],
   webServer: {
     // The real-time hub (/api/events) lives in the EventHub Durable Object,
-    // which only runs under the Workers runtime — not `next dev`. So e2e builds
-    // and serves with OpenNext. NEXT_PUBLIC_E2E exposes the debug stores the
+    // which only runs under the Workers runtime — so e2e builds the SPA and
+    // serves it with `wrangler dev`. VITE_E2E exposes the debug stores the
     // multi-user sync specs read.
-    command: "NEXT_PUBLIC_E2E=true npm run preview",
+    command: "VITE_E2E=true npm run preview",
     url: "http://localhost:8787",
     timeout: 180_000,
     reuseExistingServer: !process.env["CI"],

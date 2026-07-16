@@ -72,7 +72,7 @@ digraph PlaneoAIAgentLoop {
     graph [
       label=<
         <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
-          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#1e6b43"><B>SERVER ACTION — generateAiActionAndChat</B></FONT></TD></TR>
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#1e6b43"><B>WORKER ROUTE — POST /api/ai/decision</B></FONT></TD></TR>
           <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#4e7a61">Guards → validated input → Gemini → validated JSON. Every outcome is an ActionResult.</FONT></TD></TR>
         </TABLE>
       >,
@@ -92,7 +92,7 @@ digraph PlaneoAIAgentLoop {
   gemini [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Google Gemini</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">vision · retry/backoff</FONT></TD></TR></TABLE>>, color="#2264c7", fillcolor="#eaf3ff:#ffffff"];
 
   tick -> decide;
-  decide -> guards [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">server action</FONT></TD></TR></TABLE>>, lhead=cluster_server, ltail=cluster_client];
+  decide -> guards [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">aiClient POST</FONT></TD></TR></TABLE>>, lhead=cluster_server, ltail=cluster_client];
   prompt -> gemini [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">generateContent</FONT></TD></TR></TABLE>>];
   gemini -> valid [style=dashed, color="#6b7280", fontcolor="#6b7280"];
   valid -> broadcast [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">yes — has chatMessage</FONT></TD></TR></TABLE>>];

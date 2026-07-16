@@ -9,8 +9,8 @@ space. The user moves a first-person camera through a React Three Fiber world
 with Rapier physics; AI agents are floating eyeballs that render the scene from
 their own viewpoint, send that view to Gemini, and decide how to move and what
 to say. User positions, AI chat, and the physics cubes are synchronized between
-browsers over Server-Sent Events. It is a Next.js app that runs on **Cloudflare
-Workers** via the `@opennextjs/cloudflare` adapter, with a single `EventHub`
+browsers over Server-Sent Events. It is a Vite + React SPA served by a single
+**Cloudflare Worker** (`worker.ts` — the whole server), with a single `EventHub`
 Durable Object as the real-time authority. CI redeploys it on every push to
 `main` **when the `DEPLOY_ENABLED` repo variable is `true`** — currently unset,
 so the app is not presently deployed. The `planeo.tre.systems` custom domain is
@@ -44,16 +44,16 @@ Read before substantial work:
 
 ## Verification
 
-- **Gate before pushing:** `npm run verify` — `prettier --write .`,
-  `next lint --fix`, `tsc --noEmit`, the diagram render check, and the vitest
+- **Gate before pushing:** `npm run verify` — `eslint --fix`,
+  `prettier --write .`, `tsc --noEmit`, the diagram render check, and the vitest
   unit tests. CI's `check` job runs `verify:ci`, the non-fixing equivalent
-  (`prettier --check`, `next lint --max-warnings 0`) — so run `verify` locally
+  (`prettier --check`, `eslint --max-warnings 0`) — so run `verify` locally
   or CI will fail on anything it would have auto-fixed.
 - `npm run check` runs `verify` plus the Playwright suite (`--reporter=list`);
   use it when a change could affect runtime behavior.
-- `npm run preview` builds with OpenNext and serves the full Workers runtime
-  (including the `EventHub` Durable Object). Use it to verify real-time behavior,
-  which `npm run dev` does not exercise.
+- `npm run preview` builds the SPA with Vite and serves the full Workers runtime
+  with `wrangler dev` (including the `EventHub` Durable Object). Use it to
+  verify real-time behavior, which `npm run dev` alone does not exercise.
 - Run `npm run cf-typegen` (`wrangler types`) after editing `wrangler.jsonc` to
   regenerate the binding/env types.
 - Diagrams: edit the `.dot` sources in [`docs/diagrams/`](docs/diagrams/), then
@@ -65,15 +65,18 @@ Read before substantial work:
 
 ## Build & Run
 
-- `npm run dev` — Next.js dev server with Turbopack on <http://localhost:3000>.
-  UI only: the real-time hub (`/api/events` + the `EventHub` DO) is not served by
-  `next dev`.
-- `npm run preview` — full Workers runtime (OpenNext build + `wrangler preview`),
-  **including** the `EventHub` DO. Use this to test real-time.
-- `npm run deploy` — OpenNext build + `wrangler deploy` to Cloudflare.
+- `npm run dev` — Vite dev server with hot reload on <http://localhost:5173>.
+  It proxies `/api` to a Worker on port 8787, so run `npm run dev:worker`
+  (`wrangler dev`) alongside it for a live `EventHub`.
+- `npm run preview` — `vite build && wrangler dev` on <http://localhost:8787>:
+  the full Workers runtime, **including** the `EventHub` DO. Use this to test
+  real-time.
+- `npm run deploy` — `vite build && wrangler deploy` to Cloudflare.
 - Secrets go in `.dev.vars` locally (copy from
   [`.dev.vars.example`](.dev.vars.example)); non-secret world config is in
-  [`wrangler.jsonc`](wrangler.jsonc) `vars`. The AI loop needs
+  [`wrangler.jsonc`](wrangler.jsonc) `vars`; client build-time vars
+  (`VITE_WORLD_WRITE_TOKEN`, `VITE_TTS_ENABLED`) go in `.env`/`.env.local` and
+  are inlined by Vite. The AI loop needs
   `GOOGLE_AI_API_KEY`; live speech needs `GOOGLE_APP_CREDS_JSON`. With no keys
   the world still renders and you can move around, but agents won't think or
   speak.
@@ -86,9 +89,11 @@ Read before substantial work:
   [`src/server/eventHub.ts`](src/server/eventHub.ts), resolved by
   `idFromName("global")` — one instance, in-memory and ephemeral, no separate
   shared store and none needed (the DO is the shared-state primitive). To run
-  multiple independent worlds, shard by DO name. The DO is bundled by Wrangler,
-  not Next — import domain schemas from their specific files via relative paths,
-  never `@/domain` or modules that read `process.env` at load time.
+  multiple independent worlds, shard by DO name. The whole server graph
+  (`worker.ts` + everything under `src/server/`) is bundled by Wrangler,
+  not Vite — import domain schemas from their specific files via relative paths,
+  never `@/domain` (the `@/` alias belongs to the Vite build) or modules that
+  read env at load time.
 - **`src/domain/` schemas are the contracts.** The Zod schemas define the SSE
   wire format (`event.ts`) and the JSON the vision model must return
   (`aiAction.ts` → `AIResponseSchema`). A change there ripples to the `EventHub`
@@ -99,18 +104,19 @@ Read before substantial work:
   results. `useAIAgentController` and `Box.tsx` gate on `eventStore.hostId === myId`.
 - **Keep agent decisions cheap and paced.** The host paces each agent to roughly
   one decision every 5 s via the interval in `useAIAgentController`'s frame loop
-  (`DECISION_MAKING_INTERVAL_MS`) plus a per-agent in-flight lock. The server
-  action does no pacing of its own — removing the client interval will hammer the
-  API and the chat.
+  (`DECISION_MAKING_INTERVAL_MS`) plus a per-agent in-flight lock. The
+  `/api/ai/decision` route enforces only a per-agent minimum interval
+  (`aiGuard`) as a backstop, not a pacer — removing the client interval will
+  hammer the API and the chat.
 
 ## Tests
 
 - Unit tests: vitest (`npm test`) covers the pure logic — domain schemas,
   `eventHubLogic`, agent movement math, `retry`.
 - End-to-end: Playwright in [`tests/`](tests/) (`basic`, `api`,
-  `visual-snapshot`). `npm run test:e2e` boots the OpenNext preview server
-  (full Workers runtime) automatically; first run needs
-  `npx playwright install`.
+  `visual-snapshot`). `npm run test:e2e` builds the SPA and boots `wrangler dev`
+  (the full Workers runtime, with `VITE_E2E=true`) on port 8787 automatically;
+  first run needs `npx playwright install`.
 
 ## Commits
 

@@ -5,15 +5,15 @@ import { Physics } from "@react-three/rapier";
 import { useRef, useEffect, useState } from "react";
 import { Vector3 } from "three";
 
+import { AIAgentViews } from "@/components/AIAgentViews";
+import { ServerDrivenBoxes } from "@/components/Box";
+import { Eyes } from "@/components/Eyes";
+import { StartOverlay } from "@/components/StartOverlay";
 import { EYE_Y_POSITION, GROUND_Y_POSITION } from "@/domain/sceneConstants";
 import { useAIAgentController } from "@/hooks/useAIAgentController";
 import { useEventSource } from "@/hooks/useEventSource";
 import { useEyePositionReporting } from "@/hooks/useEyePositionReporting";
 import { useCommunicationStore } from "@/stores/communicationStore";
-import { AIAgentViews } from "@components/AIAgentViews";
-import { ServerDrivenBoxes } from "@components/Box";
-import { Eyes } from "@components/Eyes";
-import { StartOverlay } from "@components/StartOverlay";
 
 // Keyboard state, keyed lowercase so WASD works regardless of Shift/CapsLock.
 const useKeyboardControls = () => {

@@ -1,16 +1,17 @@
-"use server";
-
+// Google Cloud TTS behind the Worker's /api/tts route. Server-only: bundled
+// into the Worker by Wrangler, never by Vite.
 import { z } from "zod";
 
 import {
   actionError,
   actionOk,
   type ActionResult,
-} from "@/domain/actionResult";
-import { parseConfigInt } from "@/domain/config";
-import { getGoogleAccessToken } from "@/lib/googleAuth";
-import { log } from "@/lib/log";
-import { retry } from "@/lib/retry";
+} from "../domain/actionResult";
+import { parseConfigInt } from "../domain/config";
+import { log } from "../lib/log";
+import { retry } from "../lib/retry";
+
+import { getGoogleAccessToken } from "./googleAuth";
 
 // Google Cloud Text-to-Speech via the REST API (the gRPC @google-cloud/* client
 // does not run on the Cloudflare Workers runtime). Auth is a service-account
@@ -130,10 +131,10 @@ const ttsRateLimited = (): boolean => {
   return false;
 };
 
-export const synthesizeSpeechAction = async (
+export const synthesizeSpeech = async (
   params: SynthesizeSpeechParams,
 ): Promise<SynthesizeSpeechResult> => {
-  const ttsEnabled = process.env["NEXT_PUBLIC_TTS_ENABLED"] !== "false";
+  const ttsEnabled = process.env["TTS_ENABLED"] !== "false";
   if (!ttsEnabled) {
     return actionError("unavailable");
   }

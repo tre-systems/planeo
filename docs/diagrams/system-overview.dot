@@ -50,7 +50,7 @@ digraph PlaneoSystemOverview {
       label=<
         <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
           <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#1f5fbf"><B>BROWSER</B></FONT></TD></TR>
-          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#496f9f">The Next.js client: 3D scene, Zustand state, and the hooks that drive it.</FONT></TD></TR>
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#496f9f">The Vite-built React SPA: 3D scene, Zustand state, and the hooks that drive it.</FONT></TD></TR>
         </TABLE>
       >,
       labelloc=t, labeljust=l,
@@ -70,27 +70,27 @@ digraph PlaneoSystemOverview {
       label=<
         <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
           <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="17" COLOR="#334155"><B>CLOUDFLARE WORKER</B></FONT></TD></TR>
-          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#64748b">One Worker (worker.ts). The custom entry splits real-time traffic from the app.</FONT></TD></TR>
+          <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="12" COLOR="#64748b">One Worker (worker.ts) is the whole server: SSE, API routes, and static assets.</FONT></TD></TR>
         </TABLE>
       >,
       labelloc=t, labeljust=l,
       color="#cdd5e0", fillcolor="#f7f9fc", style="rounded,filled", penwidth=1.8, margin=22
     ];
 
-    entry [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>worker.ts entry</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">routes /api/events to the DO,<BR/>delegates everything else to Next.js</FONT></TD></TR></TABLE>>, color="#1f2f46", fillcolor="#eef1f6:#ffffff"];
+    entry [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>worker.ts entry</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">routes /api/events to the DO, /api/ai/* + /api/tts<BR/>to handlers, everything else to static assets</FONT></TD></TR></TABLE>>, color="#1f2f46", fillcolor="#eef1f6:#ffffff"];
 
     subgraph cluster_next {
       graph [
         label=<
           <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
-            <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="16" COLOR="#1e6b43"><B>NEXT.JS APP (OpenNext)</B></FONT></TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="16" COLOR="#1e6b43"><B>API ROUTES + ASSETS</B></FONT></TD></TR>
           </TABLE>
         >,
         labelloc=t, labeljust=l,
         color="#b8e5c8", fillcolor="#f4fbf6", style="rounded,filled", penwidth=1.8, margin=18
       ];
-      pages [label=<<B>Pages / RSC + assets</B>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
-      actions [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Server actions</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">generateMessage · tts<BR/>guarded: token · budget · cadence</FONT></TD></TR></TABLE>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
+      pages [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Static assets (dist/)</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">the Vite-built SPA · SPA fallback</FONT></TD></TR></TABLE>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
+      actions [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Routes: /api/ai/* · /api/tts</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">src/server: ai · tts · guards<BR/>token · budget · cadence</FONT></TD></TR></TABLE>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
     }
 
     subgraph cluster_do {
@@ -128,7 +128,7 @@ digraph PlaneoSystemOverview {
   transport -> entry [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#dfe3e9" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#6b7280">POST eyeUpdate / boxUpdate / chat</FONT></TD></TR></TABLE>>, style=dashed, color="#6b7280", fontcolor="#6b7280"];
   entry -> do_state [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">/api/events → stub</FONT></TD></TR></TABLE>>, lhead=cluster_do];
   entry -> pages [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">all other requests</FONT></TD></TR></TABLE>>, lhead=cluster_next];
-  scene -> actions [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#dfe3e9" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#6b7280">server action (vision/chat)</FONT></TD></TR></TABLE>>, ltail=cluster_browser, lhead=cluster_next, style=dashed, color="#6b7280", fontcolor="#6b7280"];
+  scene -> actions [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#dfe3e9" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#6b7280">POST /api/ai/* · /api/tts (aiClient)</FONT></TD></TR></TABLE>>, ltail=cluster_browser, lhead=cluster_next, style=dashed, color="#6b7280", fontcolor="#6b7280"];
   actions -> gemini [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">generate</FONT></TD></TR></TABLE>>, ltail=cluster_next, lhead=cluster_external];
   actions -> do_state [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">broadcast chat (EVENT_HUB binding)</FONT></TD></TR></TABLE>>, ltail=cluster_next, lhead=cluster_do];
   actions -> gtts [label=<<TABLE BORDER="1" CELLBORDER="0" STYLE="ROUNDED" COLOR="#d7dee8" BGCOLOR="#ffffff" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT POINT-SIZE="13" COLOR="#3d4a5c">synthesize speech</FONT></TD></TR></TABLE>>, ltail=cluster_next];

@@ -40,21 +40,22 @@ the same agents and boxes.
 
 ## Codebase map
 
-| Path                           | Responsibility                                                                                                                                                                                                                                                                                 |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/app/layout.tsx`           | Root layout: metadata + PWA manifest. No providers.                                                                                                                                                                                                                                            |
-| `src/app/page.tsx`             | `HomePage` client component. Mints a per-client `myId` (`nanoid(6)`), mounts the scene + chat UI, starts the text-chat and eye-sync hooks.                                                                                                                                                     |
-| `src/app/components/Scene.tsx` | React Three Fiber host: opens the SSE connection, gates on the start overlay, owns the human camera and keyboard controls, renders the world.                                                                                                                                                  |
-| `src/app/components/`          | All client components: the R3F scene pieces (`Eye`/`Eyes`, `Box`, `AIAgentViews`, `StartOverlay`) and the DOM chat UI (`ChatWindow`, `ChatMessage`, `ChatInput`, `ChatToggleButton`).                                                                                                          |
-| `src/hooks/`                   | `useEventSource` (SSE in), `useEyePositionReporting` (position out), `useEyesDataSynchronizer`, `useAIAgentController` (agent vision + decisions; host only), `useAiChat` (text replies).                                                                                                      |
-| `src/app/actions/`             | Server actions (the only `"use server"` modules): `generateMessage.ts` (AI vision/action/chat), `tts.ts` (Google Cloud TTS via REST).                                                                                                                                                          |
-| `src/server/eventHub.ts`       | The `EventHub` Durable Object: the single real-time authority (eyes, boxes, open SSE connections) and the SSE endpoint handler.                                                                                                                                                                |
-| `worker.ts`                    | Custom Worker entry: re-exports `EventHub`, routes `/api/events` to the DO, delegates everything else to the Next.js app.                                                                                                                                                                      |
-| `src/lib/`                     | `googleAI.ts` (Gemini client + model selection), `googleAuth.ts` (Web Crypto OAuth), `aiGuard.ts` (billable-call guards), `worldAuth.ts` (write token), `eventEgress.ts` (client POST door), `aiDecisionPrompt.ts` (decision prompt + responseSchema), `log.ts`, `retry.ts`, `exposeStore.ts`. |
-| `src/stores/`                  | Zustand stores (see below).                                                                                                                                                                                                                                                                    |
-| `src/domain/`                  | Zod schemas and shared constants (the data contracts).                                                                                                                                                                                                                                         |
-| `wrangler.jsonc`               | Worker config: `main = worker.ts`, the `EVENT_HUB` Durable Object binding + migration, non-secret `vars`.                                                                                                                                                                                      |
-| `open-next.config.ts`          | `@opennextjs/cloudflare` adapter config (default in-memory cache).                                                                                                                                                                                                                             |
+| Path                       | Responsibility                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `index.html`               | The SPA document: metadata + PWA manifest, loads `src/main.tsx`.                                                                                                                                                                                                                                                                                                                                       |
+| `src/main.tsx`             | React entry: mounts `App` under `StrictMode`.                                                                                                                                                                                                                                                                                                                                                          |
+| `src/App.tsx`              | `HomePage`. Mints a per-client `myId` (`nanoid(6)`), mounts the scene + chat UI, starts the text-chat and eye-sync hooks.                                                                                                                                                                                                                                                                              |
+| `src/components/Scene.tsx` | React Three Fiber host: opens the SSE connection, gates on the start overlay, owns the human camera and keyboard controls, renders the world.                                                                                                                                                                                                                                                          |
+| `src/components/`          | All client components: the R3F scene pieces (`Eye`/`Eyes`, `Box`, `AIAgentViews`, `StartOverlay`) and the DOM chat UI (`ChatWindow`, `ChatMessage`, `ChatInput`, `ChatToggleButton`).                                                                                                                                                                                                                  |
+| `src/hooks/`               | `useEventSource` (SSE in), `useEyePositionReporting` (position out), `useEyesDataSynchronizer`, `useAIAgentController` (agent vision + decisions; host only), `useAiChat` (text replies).                                                                                                                                                                                                              |
+| `src/server/eventHub.ts`   | The `EventHub` Durable Object: the single real-time authority (eyes, boxes, open SSE connections) and the SSE endpoint handler.                                                                                                                                                                                                                                                                        |
+| `src/server/`              | The rest of the Wrangler-only server code: `routes.ts` (HTTP handlers for the billable API routes), `ai.ts` (Gemini vision/action/chat), `tts.ts` (Google Cloud TTS via REST), `googleAI.ts` (Gemini client + model selection), `googleAuth.ts` (Web Crypto OAuth), `aiGuard.ts` (billable-call guards), `aiDecisionPrompt.ts` (decision prompt + responseSchema), `eventHubLogic.ts` (pure DO logic). |
+| `worker.ts`                | The whole server: re-exports `EventHub`, routes `/api/events` to the DO and the `/api/ai/*` + `/api/tts` POSTs to `src/server/routes.ts`, serves the Vite-built SPA from `dist/` for everything else.                                                                                                                                                                                                  |
+| `src/lib/`                 | Client-side and shared helpers: `aiClient.ts` (typed wrappers for the AI/TTS routes), `worldAuth.ts` (write token), `eventEgress.ts` (client POST door), `log.ts`, `retry.ts`, `exposeStore.ts`, `utils.ts`.                                                                                                                                                                                           |
+| `src/stores/`              | Zustand stores (see below).                                                                                                                                                                                                                                                                                                                                                                            |
+| `src/domain/`              | Zod schemas and shared constants (the data contracts).                                                                                                                                                                                                                                                                                                                                                 |
+| `wrangler.jsonc`           | Worker config: `main = worker.ts`, the `EVENT_HUB` Durable Object binding + migration, the `dist/` assets binding with SPA fallback, non-secret `vars`.                                                                                                                                                                                                                                                |
+| `vite.config.ts`           | The client build (SPA → `dist/`) and the dev server, which proxies `/api` to a running `wrangler dev`.                                                                                                                                                                                                                                                                                                 |
 
 ## Patterns
 
@@ -82,7 +83,7 @@ are tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md#pattern-consistency--gaps).
 - **The LLM's output is a schema.** The response is constrained-decoded against
   a Gemini `responseSchema` (`aiDecisionPrompt.ts`), then still validated
   against `AIResponseSchema` — zod owns the ranges `Schema` cannot express
-  (`generateMessage.ts`).
+  (`src/server/ai.ts`).
 - **Refinements for cross-field rules.** Invariants like "at least one of `p`/`l`"
   live in a `.refine()`d schema, not handler code (`ValidatedEyeUpdatePayloadSchema`,
   `ValidatedBoxUpdatePayloadSchema`).
@@ -90,7 +91,7 @@ are tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md#pattern-consistency--gaps).
   promoted to `src/domain/` exactly when two runtimes must agree on it
   (`sceneConstants` for geometry, `realtimeConstants` for the purge clock and
   agent-view size); single-consumer constants stay local to their file.
-- **One failure shape: `ActionResult`.** Every server action returns
+- **One failure shape: `ActionResult`.** Every AI/TTS route returns
   `{ ok: true, value } | { ok: false, reason }` with a small closed set of
   reasons (`domain/actionResult.ts`), so callers can tell a refusal
   (`unauthorized`, `rate-limited` — back off) from an empty success or an
@@ -109,8 +110,10 @@ are tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md#pattern-consistency--gaps).
   `isConnected && hostId === myId` — and `eventStore` nulls `hostId` on
   disconnect/error — so a disconnected ex-host halts instantly instead of
   double-driving (and double-billing) off a stale election.
-- **Custom Worker entry: route-one, delegate-rest.** `worker.ts` forwards
-  `/api/events` to the DO and hands everything else to the Next.js app.
+- **One Worker entry: route the APIs, serve the SPA.** `worker.ts` forwards
+  `/api/events` to the DO, dispatches the `/api/ai/*` and `/api/tts` POSTs to
+  their handlers in `src/server/routes.ts`, and serves the built SPA (the
+  `ASSETS` binding, with single-page-app fallback) for everything else.
 - **Broadcast / subscribe with state replay.** A new SSE subscriber is registered,
   replayed the full current world, then fed live deltas; cleanup is driven by the
   request abort signal.
@@ -128,18 +131,20 @@ are tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md#pattern-consistency--gaps).
   permanently agentless.
 - **Self-rescheduling alarm.** The DO's `alarm()` does periodic housekeeping
   (purge stale eyes) and only re-arms while there is something to maintain.
-- **`"use server"` means public.** The three files under `src/app/actions/` are
-  the only `"use server"` modules — every export is an anonymous POST-invokable
-  endpoint and must carry its own guards. Server helpers that must NOT be
-  public (`googleAI.ts`, `googleAuth.ts`) instead `import "server-only"`, with
-  a comment saying exactly what a `"use server"` directive would leak.
+- **`src/server/` is the server boundary.** Everything under it is bundled
+  only by Wrangler into the Worker, never by Vite into the client, and its
+  only entry points are the explicit routes `worker.ts` wires up. Each route
+  handler (`routes.ts`) is an anonymous POST endpoint and must carry its own
+  guards; nothing in `src/server/` may be imported from client code.
 - **Guarded billable surface.** Anything that spends money or mutates the world
   carries layered guards: the optional `WORLD_WRITE_TOKEN` bearer gate, a
   rolling one-hour in-memory budget (`aiGuard.ts`, `tts.ts`), a server-side
   per-agent decision-cadence floor, input length caps, and allowlisted enums
   (TTS voices). Budget slots are consumed only after validation passes.
-- **Bindings via `getCloudflareContext().env`.** Server actions reach the DO
-  through the binding; the DO reads config from its injected `env` param.
+- **Bindings via the `env` parameter.** `worker.ts` threads the Worker `env`
+  (the `EVENT_HUB` binding) into the route handlers and on into
+  `src/server/ai.ts`; the DO reads config from its injected `env` param. No
+  ambient context — bindings always arrive as arguments.
 - **Lazy singleton clients.** External clients/credentials are created once and
   cached (the Gemini client; the OAuth token, cached with an expiry).
 - **Workers-native crypto.** Google auth is REST + Web Crypto (RS256), never the
@@ -149,17 +154,19 @@ are tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md#pattern-consistency--gaps).
   TTS, and the OAuth token exchange. Nothing external is called bare.
 - **Degrade, don't die.** Optional capabilities fail to a quieter world, never a
   broken one: missing API keys leave a walkable world without agent thought or
-  speech, `postChatMessageToEvents` is best-effort so `next dev` without the DO
-  binding still works, and malformed config falls back to defaults
+  speech, `postChatMessageToEvents` is best-effort so a broken hub can't take
+  down the AI loop, and malformed config falls back to defaults
   (`parseConfigInt`, `parseAgentsConfig`).
 - **The host paces the agent loop; the server enforces the floor.** The ~5 s
   cadence between agent decisions is a client-side interval in the host's
   `useFrame` (plus a 60 s client back-off after a refusal); `aiGuard`'s
   per-agent minimum interval makes the pacing a server invariant rather than a
   client courtesy.
-- **Wrangler-bundled code imports relatively.** The DO is bundled by Wrangler, not
-  Next, so it imports domain schemas from specific files via relative paths —
-  never `@/…` or any module that reads `process.env` at load.
+- **Wrangler-bundled code imports relatively.** The whole server graph
+  (`worker.ts` and everything under `src/server/`) is bundled by Wrangler, not
+  Vite, so it imports domain schemas from specific files via relative paths —
+  never `@/…` (the alias belongs to the Vite build) or any module that reads
+  env at load.
 
 ### Client state & rendering
 
@@ -199,7 +206,7 @@ rawEyeEventStore`, `chatMessage → communicationStore` with the own-echo
   allocating (`Eyes.tsx`, `Box.tsx`, `Scene.tsx`, `aiAgentCapture.ts`) — safe
   because the frame loop is synchronous.
 - **Hooks are side-effect controllers.** `use*` hooks render nothing; they own the
-  subscriptions, intervals, and frame loops, wired at the top of `page.tsx`/`Scene.tsx`.
+  subscriptions, intervals, and frame loops, wired at the top of `App.tsx`/`Scene.tsx`.
 - **Refs mirror the store** for per-frame, non-reactive objects (rigid bodies,
   render targets) so frame code never triggers re-renders.
 
@@ -217,7 +224,7 @@ rawEyeEventStore`, `chatMessage → communicationStore` with the own-echo
   Cloudflare observability); `log.debug` is compiled out of production builds.
   No raw `console.*` outside the logger.
 - **Env-gated debug handles.** Stores attach to `window.__store` only outside
-  production (or under `NEXT_PUBLIC_E2E`).
+  production (or under `VITE_E2E`).
 - **One technical reference.** This `ARCHITECTURE.md` is the comprehensive
   overview; `docs/BACKLOG.md` tracks gaps and forward work, and
   `AGENTS.md`/`CLAUDE.md` cover the workflow. Per-feature prose is folded in here
@@ -225,7 +232,7 @@ rawEyeEventStore`, `chatMessage → communicationStore` with the own-echo
 
 ## Render & input
 
-[`Scene.tsx`](src/app/components/Scene.tsx) opens the SSE connection via
+[`Scene.tsx`](src/components/Scene.tsx) opens the SSE connection via
 `useEventSource`, then gates rendering on a local `isStarted` state. Until
 the user clicks the `StartOverlay`, nothing renders — the gate exists so the
 browser's autoplay policy will allow audio once interaction begins. After start
@@ -244,9 +251,9 @@ Rotation is yaw-only and the camera's Y is locked to `EYE_Y_POSITION` (-11.9).
 
 The [`EventHub`](src/server/eventHub.ts) Durable Object both holds the world
 state and serves the SSE endpoint. [`worker.ts`](worker.ts) is the Worker entry:
-it routes `/api/events` straight to the one DO stub (`idFromName("global")`) and
-delegates every other request to the Next.js app. The DO's `fetch` handles two
-methods:
+it routes `/api/events` straight to the one DO stub (`idFromName("global")`),
+the AI/TTS POSTs to their handlers, and serves the built SPA for every other
+request. The DO's `fetch` handles two methods:
 
 - **`GET /api/events?id=<clientId>`** opens an SSE stream (`text/event-stream`).
   On connect it initializes the boxes once, seeds the configured AI agents' eye
@@ -290,7 +297,7 @@ every 20 s. `useEyesDataSynchronizer` maps raw eye records into the animated
 
 The world runs one Rapier `<Physics>` simulation. The cubes are simulated on the
 **host** only: there each box is a `dynamic` rigid body, and
-[`Box.tsx`](src/app/components/Box.tsx) transmits its pose (change-detected,
+[`Box.tsx`](src/components/Box.tsx) transmits its pose (change-detected,
 rounded) as `boxUpdate` events. On every other client the same boxes are
 `kinematicPosition` bodies that follow the `box` events the host produces (lerped
 toward the target by `boxStore.updateBoxAnimations`). The `RigidBody` is keyed on
@@ -312,7 +319,7 @@ server-authoritative color, the art is **not** synced across clients.
 Agents default to **Orion** (`ai-agent-1`) and **Nova** (`ai-agent-2`), or
 whatever `AI_AGENTS_CONFIG` defines ([`src/domain/aiAgent.ts`](src/domain/aiAgent.ts)).
 Two Gemini models back them, both via the `@google/genai` client keyed by
-`GOOGLE_AI_API_KEY` ([`src/lib/googleAI.ts`](src/lib/googleAI.ts)):
+`GOOGLE_AI_API_KEY` ([`src/server/googleAI.ts`](src/server/googleAI.ts)):
 
 - **Vision/action:** `gemini-3.1-flash-lite` (override with `GOOGLE_VISION_MODEL`)
 - **Text chat:** `gemini-3.1-flash-lite` (override with `GOOGLE_TEXT_MODEL`)
@@ -332,14 +339,17 @@ the local user) it allocates an offscreen `PerspectiveCamera` and a `320×200`
 - **Decision** every `~5 s` (the agent-loop rate limiter), guarded by a per-agent
   in-flight lock: send the latest thumbnail, the last 10 chat messages, and the
   agent's self state (position, heading, and its last 5 actions — the model's
-  short-term memory) to the `generateAiActionAndChat` server action, then apply
+  short-term memory) to the Worker's `POST /api/ai/decision` route (through the
+  typed wrapper in [`src/lib/aiClient.ts`](src/lib/aiClient.ts), which carries
+  the write token as an `Authorization: Bearer` header), then apply
   the returned action locally — `move` translates along the forward vector by
   `distance × 10`; `turn` rotates the look-at about Y by `degrees`. The new
   position is reported back over SSE. A refusal (`unauthorized`/`rate-limited`)
   backs the agent off for 60 s instead of retrying on the next cadence tick.
 
-[`generateAiActionAndChat`](src/app/actions/generateMessage.ts) is the server
-side. The static "newly-awakened, disoriented" persona goes in
+[`generateAiActionAndChat`](src/server/ai.ts) is the server side, behind
+`POST /api/ai/decision` ([`src/server/routes.ts`](src/server/routes.ts)). The
+static "newly-awakened, disoriented" persona goes in
 `systemInstruction` (byte-identical every call, so the changing parts come
 last — the ordering Gemini's implicit prefix caching wants); the dynamic turn
 (name, pose, recent actions, chat history, then the image) goes in the user
@@ -348,8 +358,8 @@ content. The response is constrained-decoded against a Gemini
 malformed JSON are impossible; the result is still validated against
 `AIResponseSchema` (`{ chatMessage?, action }`), which also enforces the
 ranges `Schema` cannot express. If there's a chat message it broadcasts it to
-the `EventHub` DO via the `EVENT_HUB` binding (`getCloudflareContext().env`)
-and returns the action. Pacing is the host's job: the `~5 s` cadence lives in
+the `EventHub` DO via the `EVENT_HUB` binding (on the `env` threaded from
+`worker.ts`) and returns the action. Pacing is the host's job: the `~5 s` cadence lives in
 `useAIAgentController`'s frame loop, so the action returns as soon as Gemini
 does.
 
@@ -357,22 +367,26 @@ does.
 
 [`useAiChat`](src/hooks/useAiChat.ts) (page-level) watches the chat. When the
 most recent message is from the human user, after a `1500–2500 ms` delay it asks
-**only the first agent** to reply via `generateAiChatMessage` (text-only) and
+**only the first agent** to reply via `POST /api/ai/chat` (text-only) and
 broadcasts the result. The pending reply is keyed to the human message id, so
 agent chatter arriving in the meantime doesn't cancel it.
 
 ## Audio / TTS
 
-[`tts.ts`](src/app/actions/tts.ts) `synthesizeSpeechAction` is real Google Cloud
-TTS, called over the **REST API** (`texttospeech.googleapis.com`). Auth is an
+[`synthesizeSpeech`](src/server/tts.ts), behind the Worker's `POST /api/tts`
+route, is real Google Cloud TTS, called over the **REST API**
+(`texttospeech.googleapis.com`). Auth is an
 OAuth access token minted from the `GOOGLE_APP_CREDS_JSON` service-account key
-with the Web Crypto API (RS256) in [`googleAuth.ts`](src/lib/googleAuth.ts) — the
+with the Web Crypto API (RS256) in [`googleAuth.ts`](src/server/googleAuth.ts) — the
 gRPC `@google-cloud/*` client cannot run on the Workers runtime. It
 deterministically assigns each `userId` one of 24 Chirp3-HD voices (by hash),
 synthesizes MP3, and returns base64.
-[`ChatMessage.tsx`](src/app/components/ChatMessage.tsx) calls it client-side for each
+[`ChatMessage.tsx`](src/components/ChatMessage.tsx) calls it client-side (the
+`synthesizeSpeechAction` wrapper in `aiClient.ts`) for each
 incoming message (skipping the user's own and `/`-commands) and plays the audio.
-Disabled when `NEXT_PUBLIC_TTS_ENABLED` is exactly `"false"`.
+Disabled when the build-time `VITE_TTS_ENABLED` is exactly `"false"` (the
+client never calls the route) or the server-side `TTS_ENABLED` is `"false"`
+(the route refuses).
 
 ## State (Zustand stores)
 
@@ -413,35 +427,39 @@ return — `turn` is clamped to 1–45°), `message`, `event` (the SSE union),
 Secrets (`GOOGLE_AI_API_KEY`, `GOOGLE_APP_CREDS_JSON`) are set with
 `wrangler secret put <NAME>` (or `.dev.vars` locally, copied from
 [`.dev.vars.example`](.dev.vars.example)). The non-secret world config lives in
-[`wrangler.jsonc`](wrangler.jsonc) `vars`. `NEXT_PUBLIC_TTS_ENABLED` is
-build-time (inlined by Next).
+[`wrangler.jsonc`](wrangler.jsonc) `vars`. The `VITE_*` variables are
+build-time: Vite inlines them into the client bundle from `.env`/`.env.local`
+(or the shell) at `vite build`.
 
-| Variable                        | Required | Purpose                                                                                                                                                                                       | Set via          | Default                 |
-| ------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ----------------------- |
-| `GOOGLE_AI_API_KEY`             | for AI   | Gemini client (text + vision).                                                                                                                                                                | secret           | —                       |
-| `GOOGLE_APP_CREDS_JSON`         | for TTS  | Google Cloud service-account JSON for Chirp3 TTS.                                                                                                                                             | secret           | —                       |
-| `AI_AGENTS_CONFIG`              | no       | JSON array of `{ id, displayName }` agents. Server/DO only — not `NEXT_PUBLIC_`, so client bundles always use the defaults (a custom config desyncs client-side agent identity; see backlog). | `wrangler.jsonc` | Orion + Nova            |
-| `TOTAL_AGENTS`                  | no       | How many agents get eye positions.                                                                                                                                                            | `wrangler.jsonc` | `0`                     |
-| `NUMBER_OF_BOXES`               | no       | Physics cubes to spawn.                                                                                                                                                                       | `wrangler.jsonc` | `5`                     |
-| `NEXT_PUBLIC_TTS_ENABLED`       | no       | Set to `"false"` to disable TTS.                                                                                                                                                              | build-time env   | enabled                 |
-| `GOOGLE_TEXT_MODEL`             | no       | Gemini model for text chat.                                                                                                                                                                   | secret/env       | `gemini-3.1-flash-lite` |
-| `GOOGLE_VISION_MODEL`           | no       | Gemini model for the vision/action loop.                                                                                                                                                      | secret/env       | `gemini-3.1-flash-lite` |
-| `WORLD_WRITE_TOKEN`             | no       | Write gate: only bearers may POST events or invoke the Gemini actions.                                                                                                                        | secret           | open world              |
-| `NEXT_PUBLIC_WORLD_WRITE_TOKEN` | no       | The same token, inlined into trusted-writer client builds.                                                                                                                                    | build-time env   | —                       |
-| `RATE_LIMIT_AI_HOURLY`          | no       | Rolling one-hour budget for the billable Gemini actions (per isolate).                                                                                                                        | secret/env       | `2000`                  |
-| `RATE_LIMIT_TTS_HOURLY`         | no       | Rolling one-hour budget for TTS synthesis (per isolate).                                                                                                                                      | secret/env       | `240`                   |
+| Variable                 | Required | Purpose                                                                                                                                                                                      | Set via          | Default                 |
+| ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ----------------------- |
+| `GOOGLE_AI_API_KEY`      | for AI   | Gemini client (text + vision).                                                                                                                                                               | secret           | —                       |
+| `GOOGLE_APP_CREDS_JSON`  | for TTS  | Google Cloud service-account JSON for Chirp3 TTS.                                                                                                                                            | secret           | —                       |
+| `AI_AGENTS_CONFIG`       | no       | JSON array of `{ id, displayName }` agents. Server/DO only — not a `VITE_` var, so client bundles always use the defaults (a custom config desyncs client-side agent identity; see backlog). | `wrangler.jsonc` | Orion + Nova            |
+| `TOTAL_AGENTS`           | no       | How many agents get eye positions.                                                                                                                                                           | `wrangler.jsonc` | `0`                     |
+| `NUMBER_OF_BOXES`        | no       | Physics cubes to spawn.                                                                                                                                                                      | `wrangler.jsonc` | `5`                     |
+| `VITE_TTS_ENABLED`       | no       | Set to `"false"` to build a client that never calls TTS.                                                                                                                                     | `.env` at build  | enabled                 |
+| `TTS_ENABLED`            | no       | Server-side TTS kill switch: `"false"` makes `/api/tts` refuse.                                                                                                                              | secret/env       | enabled                 |
+| `GOOGLE_TEXT_MODEL`      | no       | Gemini model for text chat.                                                                                                                                                                  | secret/env       | `gemini-3.1-flash-lite` |
+| `GOOGLE_VISION_MODEL`    | no       | Gemini model for the vision/action loop.                                                                                                                                                     | secret/env       | `gemini-3.1-flash-lite` |
+| `WORLD_WRITE_TOKEN`      | no       | Write gate: only bearers may POST events or invoke the Gemini routes.                                                                                                                        | secret           | open world              |
+| `VITE_WORLD_WRITE_TOKEN` | no       | The same token, inlined into trusted-writer client builds.                                                                                                                                   | `.env` at build  | —                       |
+| `RATE_LIMIT_AI_HOURLY`   | no       | Rolling one-hour budget for the billable Gemini actions (per isolate).                                                                                                                       | secret/env       | `2000`                  |
+| `RATE_LIMIT_TTS_HOURLY`  | no       | Rolling one-hour budget for TTS synthesis (per isolate).                                                                                                                                     | secret/env       | `240`                   |
 
 ### Cost & write protection
 
-Server actions are anonymous POST RPCs, so the billable surfaces carry their
-own guards ([`src/lib/aiGuard.ts`](src/lib/aiGuard.ts),
+The Worker's API routes are anonymous POST endpoints, so the billable surfaces
+carry their own guards ([`src/server/aiGuard.ts`](src/server/aiGuard.ts),
 [`src/lib/worldAuth.ts`](src/lib/worldAuth.ts)):
 
 - With `WORLD_WRITE_TOKEN` set, the `EventHub` POST surface and the Gemini
-  actions require the bearer token; clients built with
-  `NEXT_PUBLIC_WORLD_WRITE_TOKEN` present it (via `postWorldEvent`, which falls
-  back from `sendBeacon` to a keepalive `fetch` because beacons cannot carry
-  the `Authorization` header). Everyone else is a read-only spectator.
+  routes require the bearer token; clients built with
+  `VITE_WORLD_WRITE_TOKEN` present it as an `Authorization: Bearer` header —
+  the `aiClient.ts` wrappers on the AI routes, and `postWorldEvent` on the
+  events endpoint (which falls back from `sendBeacon` to a keepalive `fetch`
+  because beacons cannot carry the header). Everyone else is a read-only
+  spectator.
 - Rolling one-hour budgets cap Gemini (`RATE_LIMIT_AI_HOURLY`) and TTS
   (`RATE_LIMIT_TTS_HOURLY`) calls regardless of auth — in-memory
   circuit-breakers, exact on a single server and best-effort per isolate on
@@ -449,25 +467,26 @@ own guards ([`src/lib/aiGuard.ts`](src/lib/aiGuard.ts),
 
 ## Build & deploy
 
-The app runs on **Cloudflare Workers** via the
-[`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare) adapter.
-[`open-next.config.ts`](open-next.config.ts) configures the adapter and
-[`wrangler.jsonc`](wrangler.jsonc) the Worker — `main` is
-[`worker.ts`](worker.ts), with the `EVENT_HUB` Durable Object binding plus its
-`new_sqlite_classes` migration and the non-secret `vars`.
+The client is a **Vite + React SPA**: `vite build` compiles it into `dist/`,
+and the **Cloudflare Worker** serves it through the `ASSETS` binding with
+single-page-app fallback. [`vite.config.ts`](vite.config.ts) configures the
+client build and dev proxy; [`wrangler.jsonc`](wrangler.jsonc) the Worker —
+`main` is [`worker.ts`](worker.ts), with the `EVENT_HUB` Durable Object binding
+plus its `new_sqlite_classes` migration, the `dist/` assets directory, and the
+non-secret `vars`.
 
-- `npm run dev` — Next.js dev server (Turbopack, <http://localhost:3000>). It
-  serves the UI only; the real-time hub at `/api/events` lives in `worker.ts`
-  and the DO, which `next dev` does not run.
-- `npm run preview` — `opennextjs-cloudflare build && opennextjs-cloudflare preview`.
+- `npm run dev` — Vite dev server (<http://localhost:5173>) with hot reload.
+  It serves the UI and proxies `/api` to a Worker on port 8787 — run
+  `npm run dev:worker` (`wrangler dev`) alongside it for a live `EventHub`.
+- `npm run preview` — `vite build && wrangler dev` (<http://localhost:8787>).
   Runs the full Workers runtime locally, **including** the `EventHub` DO. Use
   this to exercise real-time behavior.
-- `npm run deploy` — `opennextjs-cloudflare build && opennextjs-cloudflare deploy`.
+- `npm run deploy` — `vite build && wrangler deploy`.
 - `npm run cf-typegen` — `wrangler types`; rerun after editing `wrangler.jsonc`.
 
 CI is [`.github/workflows/ci.yml`](.github/workflows/ci.yml): a `check` job
-(`npm run verify`) gates every push and PR, and a `deploy` job builds with
-OpenNext and ships to Cloudflare via
+(`npm run verify:ci`) gates every push and PR, a non-gating `e2e` job runs the
+Playwright suite in parallel, and a `deploy` job ships to Cloudflare via
 [`cloudflare/wrangler-action`](https://github.com/cloudflare/wrangler-action) on
 push to `main`. Auto-deploy is gated behind the `DEPLOY_ENABLED` repo variable,
 currently unset — so the app is **not currently deployed**. Set it to `true`

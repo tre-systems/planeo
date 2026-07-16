@@ -6,11 +6,8 @@
 # testing
 /coverage
 
-# next.js
-/.next/
-
-# cloudflare / opennext build output
-/.open-next/
+# vite build output
+/dist/
 /.wrangler/
 
 # misc
@@ -29,7 +26,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 
 # playwright
 /playwright-report

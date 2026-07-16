@@ -1,12 +1,9 @@
-// Server-only helper — NOT a "use server" module. A "use server" directive
-// here would publish generateTextCompletion (arbitrary prompt, caller-chosen
-// config, no aiGuard) as an anonymous public server-action endpoint.
-import "server-only";
-
+// Server-only: bundled into the Worker by Wrangler, never by Vite — nothing
+// under src/server/ may be imported from client code.
 import { GoogleGenAI, type GenerateContentConfig } from "@google/genai";
 
-import { log } from "./log";
-import { retry } from "./retry";
+import { log } from "../lib/log";
+import { retry } from "../lib/retry";
 
 let genAIClient: GoogleGenAI | null = null;
 

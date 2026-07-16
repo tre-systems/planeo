@@ -1,9 +1,4 @@
-// Prompt and output-schema material for the agent decision call. Server-only
-// helper — NOT a "use server" module: nothing here carries guards, so a
-// "use server" directive would publish unguarded prompt internals as
-// anonymous endpoints.
-import "server-only";
-
+// Prompt and output-schema material for the agent decision call.
 import { Type, type Schema } from "@google/genai";
 
 import { senderDisplayName } from "../domain/aiAgent";

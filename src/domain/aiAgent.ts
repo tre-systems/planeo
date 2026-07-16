@@ -6,7 +6,13 @@ let parsedAIAgents: AIAgent[] | null = null;
 
 export const getAIAgents = (): AIAgent[] => {
   if (parsedAIAgents !== null) return parsedAIAgents;
-  parsedAIAgents = parseAgentsConfig(process.env["AI_AGENTS_CONFIG"]);
+  // Shared with the client bundle, where `process` does not exist — browsers
+  // always get the defaults (see BACKLOG: AI_AGENTS_CONFIG is server-only).
+  const raw =
+    typeof process === "undefined"
+      ? undefined
+      : process.env["AI_AGENTS_CONFIG"];
+  parsedAIAgents = parseAgentsConfig(raw);
   return parsedAIAgents;
 };
 

@@ -1,13 +1,11 @@
-"use client";
-
 import { useEffect, useRef } from "react";
 
-import { synthesizeSpeechAction } from "@/app/actions/tts";
 import { senderDisplayName } from "@/domain/aiAgent";
 import type { Message } from "@/domain/message";
+import { synthesizeSpeechAction } from "@/lib/aiClient";
 import { log } from "@/lib/log";
 
-const ttsEnabled = process.env["NEXT_PUBLIC_TTS_ENABLED"] !== "false";
+const ttsEnabled = import.meta.env["VITE_TTS_ENABLED"] !== "false";
 
 interface ChatMessageProps {
   message: Message;

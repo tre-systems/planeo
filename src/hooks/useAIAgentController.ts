@@ -1,10 +1,7 @@
-"use client";
-
 import { useThree, useFrame } from "@react-three/fiber";
 import { useEffect, useRef, useCallback } from "react";
 import { PerspectiveCamera, WebGLRenderTarget } from "three";
 
-import { generateAiActionAndChat } from "@/app/actions/generateMessage";
 import type { AIAction, AgentSelfState } from "@/domain/aiAction";
 import { getAIAgents } from "@/domain/aiAgent";
 import type { Vec3 as DomainVec3 } from "@/domain/common";
@@ -17,6 +14,7 @@ import {
   AGENT_VIEW_HEIGHT as CAPTURE_HEIGHT,
 } from "@/domain/realtimeConstants";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
+import { generateAiActionAndChat } from "@/lib/aiClient";
 import { postWorldEvent } from "@/lib/eventEgress";
 import { log } from "@/lib/log";
 import { roundArray } from "@/lib/utils";

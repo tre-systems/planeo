@@ -18,7 +18,7 @@ Planeo is designed to be self-hosted: run it locally or deploy your own instance
 - **Real-time Multi-user Interaction:** See other users' movements (represented as eyeballs) in real-time using Server-Sent Events (SSE).
 - **AI Agents with Vision, Actions & Speech:** AI agents (configurable, default to "Orion" and "Nova") perceive their surroundings, generate chat messages, and perform actions (like moving or turning). Their visual perspective updates at ~10 FPS and a Gemini decision is made roughly every 5 seconds. Models default to `gemini-3.1-flash-lite` and are overridable via `GOOGLE_TEXT_MODEL` / `GOOGLE_VISION_MODEL`.
 - **Chat Functionality:** View messages from AI agents in a shared chat window.
-- **Text-to-Speech (TTS):** AI chat messages are spoken aloud using Google Cloud TTS (Chirp3 voices), with a distinct voice assigned per speaker. Requires `GOOGLE_APP_CREDS_JSON`; disable by setting `NEXT_PUBLIC_TTS_ENABLED=false`.
+- **Text-to-Speech (TTS):** AI chat messages are spoken aloud using Google Cloud TTS (Chirp3 voices), with a distinct voice assigned per speaker. Requires `GOOGLE_APP_CREDS_JSON`; disable by setting `VITE_TTS_ENABLED=false` at build time (or `TTS_ENABLED=false` on the Worker).
 - **Keyboard Navigation:** Control your camera movement and orientation using keyboard inputs.
 - **Physics-based World:** Interact with objects like falling cubes in an environment governed by physics.
 - **Randomized Cube Art:** Falling cubes display random artwork from a local collection on one face.
@@ -54,8 +54,8 @@ Follow these instructions to set up and run Planeo on your local machine.
 
 3.  **Set up environment variables:**
 
-    Secrets are read from a local `.dev.vars` file. Copy the example and fill it
-    in:
+    Worker-side secrets are read from a local `.dev.vars` file. Copy the
+    example and fill it in:
 
     ```bash
     cp .dev.vars.example .dev.vars
@@ -63,10 +63,10 @@ Follow these instructions to set up and run Planeo on your local machine.
 
     - `GOOGLE_AI_API_KEY`: Your API key for Google Generative AI (Gemini).
       Required for AI agents to think and chat.
-      - _Used by: `src/lib/googleAI.ts` for AI text and vision model interactions._
+      - _Used by: `src/server/googleAI.ts` for AI text and vision model interactions._
     - `GOOGLE_APP_CREDS_JSON` (Optional, for TTS): Google Cloud service-account
       JSON (single line) for the Text-to-Speech REST API.
-      - _Used by: `src/app/actions/tts.ts` via `src/lib/googleAuth.ts`._
+      - _Used by: `src/server/tts.ts` via `src/server/googleAuth.ts`._
 
     Non-secret world configuration lives in [`wrangler.jsonc`](wrangler.jsonc)
     under `vars`:
@@ -81,29 +81,40 @@ Follow these instructions to set up and run Planeo on your local machine.
     - `NUMBER_OF_BOXES` (Optional): The number of interactive cubes to spawn.
       Defaults to 5.
       - _Used by: `src/server/eventHub.ts`._
-    - `NEXT_PUBLIC_TTS_ENABLED` (Optional, build-time): Set to `"false"` to
-      disable Text-to-Speech. Defaults to enabled.
-      - _Used by: `src/components/ChatMessage.tsx`, `src/app/actions/tts.ts`._
+
+    Client build-time variables use the `VITE_` prefix and are inlined into
+    the browser bundle by Vite — set them in `.env` / `.env.local` (or the
+    shell), not in `.dev.vars`:
+
+    - `VITE_TTS_ENABLED` (Optional): Set to `"false"` to build a client that
+      never calls Text-to-Speech. Defaults to enabled.
+      - _Used by: `src/components/ChatMessage.tsx`._
+    - `VITE_WORLD_WRITE_TOKEN` (Optional): The write token, baked into
+      trusted-writer client builds.
+      - _Used by: `src/lib/worldAuth.ts`._
 
     In production, secrets are set with `wrangler secret put <NAME>`.
 
     See the comments in `wrangler.jsonc` and `.dev.vars.example` for the
     optional write-gate (`WORLD_WRITE_TOKEN`) and hourly budget caps.
 
-4.  **Run the development server (UI only):**
+4.  **Run the development server:**
 
     ```bash
     npm run dev
     ```
 
-    Open [http://localhost:3000](http://localhost:3000) in your browser. The
-    real-time hub (the `EventHub` Durable Object behind `/api/events`) is not
-    served by `next dev`.
+    Open [http://localhost:5173](http://localhost:5173) in your browser. Vite
+    serves the UI with hot reload and proxies `/api` to a local Worker on port
+    8787 — run `npm run dev:worker` (`wrangler dev`) in a second terminal to
+    provide it (the `EventHub` Durable Object behind `/api/events` only runs
+    under the Workers runtime).
 
 5.  **Run the full Workers runtime locally:**
 
-    To exercise everything — including real-time multi-user sync and the AI
-    loop — build and preview under the Cloudflare Workers runtime:
+    To exercise everything from a single server — including real-time
+    multi-user sync and the AI loop — build the SPA and serve it under the
+    Cloudflare Workers runtime on [http://localhost:8787](http://localhost:8787):
 
     ```bash
     npm run preview
@@ -111,8 +122,8 @@ Follow these instructions to set up and run Planeo on your local machine.
 
 ## Deployment
 
-Planeo runs on **Cloudflare Workers** via the `@opennextjs/cloudflare` adapter,
-with the `EventHub` Durable Object as the real-time backend. Worker config is in
+Planeo is a Vite-built SPA served by a **Cloudflare Worker**, with the
+`EventHub` Durable Object as the real-time backend. Worker config is in
 [`wrangler.jsonc`](wrangler.jsonc).
 
 Deploy from your machine with:
@@ -133,7 +144,7 @@ Production secrets (`GOOGLE_AI_API_KEY`, `GOOGLE_APP_CREDS_JSON`) are set with
 
 ## Key Technologies Used
 
-- Next.js (React Framework), running on Cloudflare Workers via `@opennextjs/cloudflare`
+- React 19 + Vite (SPA served by a Cloudflare Worker)
 - Cloudflare Durable Objects (single `EventHub` instance for real-time state)
 - React Three Fiber (for 3D graphics)
 - Drei (helpers for React Three Fiber)

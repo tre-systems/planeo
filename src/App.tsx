@@ -1,14 +1,12 @@
-"use client";
-
 import { nanoid } from "nanoid";
 import { useRef } from "react";
 
+import { ChatToggleButton } from "@/components/ChatToggleButton";
+import { ChatWindow } from "@/components/ChatWindow";
+import Scene from "@/components/Scene";
 import { useAiChat } from "@/hooks/useAiChat";
 import { useEyesDataSynchronizer } from "@/hooks/useEyesDataSynchronizer";
 import { useCommunicationStore } from "@/stores/communicationStore";
-import { ChatToggleButton } from "@components/ChatToggleButton";
-import { ChatWindow } from "@components/ChatWindow";
-import Scene from "@components/Scene";
 
 const HomePage = () => {
   const myId = useRef(nanoid(6)).current;

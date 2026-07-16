@@ -1,4 +1,3 @@
-"use client";
 import { Text, Billboard } from "@react-three/drei";
 import {
   RigidBody,

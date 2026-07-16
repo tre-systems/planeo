@@ -6,12 +6,12 @@
 // browser (e.g. the machine driving a stream) writes, viewers watch. Leave the
 // token unset for open local play.
 //
-// NEXT_PUBLIC_WORLD_WRITE_TOKEN is inlined into the client bundle at build
-// time, so only set it on builds whose users are all trusted writers (the
+// VITE_WORLD_WRITE_TOKEN is inlined into the client bundle at build time,
+// so only set it on builds whose users are all trusted writers (the
 // laptop/host build) — never on a spectator-facing deployment.
 
 export const worldWriteToken = (): string | undefined =>
-  process.env["NEXT_PUBLIC_WORLD_WRITE_TOKEN"] || undefined;
+  import.meta.env["VITE_WORLD_WRITE_TOKEN"] || undefined;
 
 export const worldWriteHeaders = (): Record<string, string> => {
   const token = worldWriteToken();

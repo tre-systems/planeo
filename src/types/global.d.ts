@@ -8,3 +8,13 @@ declare global {
     __rawEyeEventStore?: typeof useRawEyeEventStore;
   }
 }
+
+// Allows dot access under noPropertyAccessFromIndexSignature for the one env
+// var that MUST be read as `process.env.NODE_ENV` (Vite's static define).
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      NODE_ENV?: "development" | "production" | "test";
+    }
+  }
+}

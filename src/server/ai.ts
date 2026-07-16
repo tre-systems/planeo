@@ -1,35 +1,35 @@
-"use server";
-
+// The billable Gemini calls behind the Worker's /api/ai/* routes. Server-only:
+// bundled into the Worker by Wrangler, never by Vite.
 import { type GenerateContentConfig } from "@google/genai";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
 
 import {
   actionError,
   actionOk,
   type ActionResult,
-} from "@/domain/actionResult";
+} from "../domain/actionResult";
 import {
   AIResponseSchema,
   AgentSelfStateSchema,
   type AgentSelfState,
   type ParsedAIResponse,
-} from "@/domain/aiAction";
-import { getAIAgentById, senderDisplayName } from "@/domain/aiAgent";
-import { Message, MessageSchema } from "@/domain/message";
+} from "../domain/aiAction";
+import { getAIAgentById, senderDisplayName } from "../domain/aiAgent";
+import { Message, MessageSchema } from "../domain/message";
+import { log } from "../lib/log";
+import { retry } from "../lib/retry";
+
 import {
   agentSystemInstruction,
   aiResponseGeminiSchema,
   buildSituation,
-} from "@/lib/aiDecisionPrompt";
-import { agentDecisionTooSoon, aiCallBlocked } from "@/lib/aiGuard";
+} from "./aiDecisionPrompt";
+import { agentDecisionTooSoon, aiCallBlocked } from "./aiGuard";
 import {
   getGoogleAIClient,
   getActiveVisionModelName,
   generateTextCompletion,
-} from "@/lib/googleAI";
-import { log } from "@/lib/log";
-import { retry } from "@/lib/retry";
+} from "./googleAI";
 
 // Length-capped: these actions are billable and any client can call them, so
 // an unbounded history array must not be able to inflate the prompt. The real
@@ -39,15 +39,15 @@ const ImageDataUrlSchema = z.string().startsWith("data:image/jpeg;base64,");
 
 // Broadcast a chat message through the EventHub Durable Object (the single
 // real-time authority). Best-effort: failures are logged, not thrown, so a
-// missing binding during `next dev` doesn't break the AI loop.
-const postChatMessageToEvents = async (message: Message): Promise<void> => {
+// broken hub doesn't break the AI loop.
+const postChatMessageToEvents = async (
+  env: Env,
+  message: Message,
+): Promise<void> => {
   try {
-    const { env } = getCloudflareContext();
     const stub = env.EVENT_HUB.get(env.EVENT_HUB.idFromName("global"));
     // Server-side writer: present the write token when the world requires one.
-    const token =
-      process.env["WORLD_WRITE_TOKEN"] ||
-      process.env["NEXT_PUBLIC_WORLD_WRITE_TOKEN"];
+    const token = process.env["WORLD_WRITE_TOKEN"];
     await stub.fetch("https://event-hub/api/events", {
       method: "POST",
       headers: {
@@ -64,6 +64,7 @@ const postChatMessageToEvents = async (message: Message): Promise<void> => {
 };
 
 export const generateAiChatMessage = async (
+  env: Env,
   chatHistory: Message[],
   aiUserId: string,
   writeToken?: string,
@@ -99,7 +100,7 @@ export const generateAiChatMessage = async (
         text: aiResponseText.trim(),
         timestamp: Date.now(),
       };
-      await postChatMessageToEvents(aiMessage);
+      await postChatMessageToEvents(env, aiMessage);
       return actionOk(aiMessage);
     }
     log.info("ai.chat", "No response", { agent: agentName });
@@ -114,6 +115,7 @@ export const generateAiChatMessage = async (
 };
 
 export const generateAiActionAndChat = async (
+  env: Env,
   aiAgentId: string,
   imageDataUrl: string,
   chatHistory: Message[],
@@ -235,7 +237,7 @@ export const generateAiActionAndChat = async (
         text: validatedResponse.data.chatMessage,
         timestamp: Date.now(),
       };
-      await postChatMessageToEvents(aiChatMessage);
+      await postChatMessageToEvents(env, aiChatMessage);
     }
 
     return actionOk(validatedResponse.data);

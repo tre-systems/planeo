@@ -1,5 +1,3 @@
-"use client";
-
 import React from "react";
 
 import { getAIAgents } from "@/domain/aiAgent";
@@ -80,7 +78,6 @@ export const AIAgentViews = () => {
           >
             <div style={styles["imageContainer"]}>
               {imageDataUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- data: URL; the optimizer can do nothing with it
                 <img
                   src={imageDataUrl}
                   alt={`View from ${displayName}`}

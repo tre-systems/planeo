@@ -13,8 +13,10 @@ is already a tracked, deliberate quirk. The patterns the code follows are in
 - **Agent POV thumbnails are host-only.** Only the host renders each agent's
   offscreen view, so the `AIAgentViews` HUD stays blank on viewer clients — that
   redundant per-frame work is exactly what the host model removes.
-- **`next dev` serves the UI only.** The real-time hub (`/api/events` + the DO)
-  runs only under the Workers runtime; use `npm run preview` to exercise it.
+- **`npm run dev` serves the UI only.** The real-time hub (`/api/events` + the
+  DO) runs only under the Workers runtime; the Vite dev server proxies `/api`
+  to a local `wrangler dev` (`npm run dev:worker`), or use `npm run preview`
+  for the full runtime in one server.
 - **Auto-deploy paused.** CI deploys only when the `DEPLOY_ENABLED` repo variable
   is `true` (currently unset). The `planeo.tre.systems` custom domain is already
   configured in `wrangler.jsonc` and takes effect once deploy is re-enabled.
@@ -31,12 +33,13 @@ opportunistically when touching the files:
   in `useEyePositionReporting` (a pure `buildEyeUpdate(camera, last, force)`
   would deduplicate and test it), and `throttle` in `lib/utils.ts` (subtle
   trailing-edge/promise semantics, no unit test while `retry` has one).
-- **`AI_AGENTS_CONFIG` doesn't reach client bundles.** It is not `NEXT_PUBLIC_`,
+- **`AI_AGENTS_CONFIG` doesn't reach client bundles.** It is a server-side var,
+  not a `VITE_` build-time one,
   so `getAIAgents()` in the browser always returns the Orion/Nova defaults
   while the DO honors the var — a custom config would desync client-side agent
-  identity from the DO's seeds. Harmless today (the var is unset); rename to
-  `NEXT_PUBLIC_AI_AGENTS_CONFIG` (or split server/client config) before
-  configuring custom agents.
+  identity from the DO's seeds. Harmless today (the var is unset); mirror it
+  into a `VITE_AI_AGENTS_CONFIG` build-time var (or split server/client config)
+  before configuring custom agents.
 
 ## Outstanding work
 
@@ -74,13 +77,12 @@ Prioritised, P1 (highest value) → P3. None are known bugs in shipped behavior.
   playback/status indicators in the chat UI.
 - **SSE → WebSocket + DO hibernation.** A bidirectional transport with hibernation
   would cut idle cost and simplify egress; a bigger change — evaluate when needed.
-- **Re-add PWA.** `next-pwa` was removed (no service worker today); a
-  Workers-compatible SW such as Serwist could restore offline/installable support.
+- **Re-add PWA.** There is no service worker today (the manifest alone doesn't
+  make the app installable/offline-capable); a Workers-compatible service
+  worker — e.g. via `vite-plugin-pwa` or Serwist — would restore that support.
 
 ### Ops / hygiene
 
-- **`next lint` is deprecated** (removed in Next 16) — migrate the lint scripts
-  to the ESLint CLI (`next lint` → `eslint`) before the next Next major bump.
 - **Dependency bump.** `npm audit` flags 19 issues, but all are dev/build-tooling
   transitive (eslint, playwright, wrangler, postcss toolchains) or non-exploitable
   in our usage (the prod `uuid` finding needs a `buf` argument we never pass) —

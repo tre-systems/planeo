@@ -1,6 +1,9 @@
-"use server";
+// Server-only helper — NOT a "use server" module. A "use server" directive
+// here would publish generateTextCompletion (arbitrary prompt, caller-chosen
+// config, no aiGuard) as an anonymous public server-action endpoint.
+import "server-only";
 
-import { GoogleGenAI, GenerationConfig } from "@google/genai";
+import { GoogleGenAI, type GenerateContentConfig } from "@google/genai";
 
 import { log } from "./log";
 import { retry } from "./retry";
@@ -31,15 +34,13 @@ export const getGoogleAIClient = async (): Promise<GoogleGenAI> => {
   return genAIClient;
 };
 
-// Config for the active text-generation model. These getters stay async because
-// this is a "use server" module — every exported function is a Server Action and
-// must be async (Next rejects a sync export at build time).
+// Config for the active text-generation model.
 //
 // Defaults target Gemini 3.1 Flash-Lite — the cheapest current multimodal tier,
 // right for a high-volume agent loop. Override per deployment via env
 // (GOOGLE_TEXT_MODEL / GOOGLE_VISION_MODEL) so model churn never needs a code
 // change: Google retires model ids aggressively (every 1.5 and 2.0 id now 404s).
-const getActiveTextModel = async () => {
+const getActiveTextModel = () => {
   return {
     provider: "google",
     name: process.env["GOOGLE_TEXT_MODEL"] || "gemini-3.1-flash-lite",
@@ -47,14 +48,14 @@ const getActiveTextModel = async () => {
 };
 
 // Config for the active vision-capable model.
-export const getActiveVisionModel = async () => {
+export const getActiveVisionModel = () => {
   return {
     provider: "google",
     name: process.env["GOOGLE_VISION_MODEL"] || "gemini-3.1-flash-lite",
   };
 };
 
-type AIConfigOverrides = Partial<GenerationConfig>;
+type AIConfigOverrides = Partial<GenerateContentConfig>;
 
 // Calls the text model for a completion, returning undefined on error or empty
 // output so callers can degrade gracefully.
@@ -64,9 +65,12 @@ export const generateTextCompletion = async (
 ): Promise<string | undefined> => {
   try {
     const genAI: GoogleGenAI = await getGoogleAIClient();
-    const textModelConfig = await getActiveTextModel();
+    const textModelConfig = getActiveTextModel();
 
-    const baseConfig: GenerationConfig = {
+    // @google/genai takes model parameters under `config` (the old
+    // @google/generative-ai SDK's top-level `generationConfig`/`safetySettings`
+    // fields are silently ignored).
+    const baseConfig: GenerateContentConfig = {
       temperature: 0.5,
       topP: 0.8,
       topK: 30,
@@ -76,13 +80,10 @@ export const generateTextCompletion = async (
       maxOutputTokens: 150,
     };
 
-    const generationConfig = { ...baseConfig, ...configOverrides };
-
     const request = {
       model: textModelConfig.name,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig,
-      safetySettings: [],
+      config: { ...baseConfig, ...configOverrides },
     };
 
     log.debug("ai.text", "Requesting completion");

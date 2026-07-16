@@ -1,4 +1,7 @@
-"use server";
+// Server-only helper — NOT a "use server" module. A "use server" directive
+// here would publish getGoogleAccessToken as an anonymous public server-action
+// endpoint handing out the service account's OAuth token.
+import "server-only";
 
 import { z } from "zod";
 

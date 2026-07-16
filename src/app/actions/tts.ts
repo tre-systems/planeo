@@ -42,7 +42,9 @@ const chirp3Voices = [
 const SynthesizeSpeechParamsSchema = z.object({
   text: z.string().min(1, "Text cannot be empty.").max(1000, "Text too long."),
   userId: z.string().min(1, "User ID cannot be empty."),
-  voiceName: z.string().optional(),
+  // Allowlisted: this is a billable public action, and an arbitrary voice
+  // name could select premium tiers billed at multiples of Chirp pricing.
+  voiceName: z.enum(chirp3Voices as [string, ...string[]]).optional(),
 });
 
 type SynthesizeSpeechParams = z.infer<typeof SynthesizeSpeechParamsSchema>;
@@ -136,17 +138,18 @@ export const synthesizeSpeechAction = async (
     return { audioBase64: "", error: "TTS is disabled." };
   }
 
-  if (ttsRateLimited()) {
-    log.warn("tts", "Hourly TTS rate limit reached; skipping synthesis");
-    return { error: "TTS rate limit reached." };
-  }
-
   const validationResult = SynthesizeSpeechParamsSchema.safeParse(params);
   if (!validationResult.success) {
     log.warn("tts", "Invalid parameters", {
       details: validationResult.error.flatten(),
     });
     return { error: "Invalid parameters." };
+  }
+
+  // Only a valid request may consume a budget slot.
+  if (ttsRateLimited()) {
+    log.warn("tts", "Hourly TTS rate limit reached; skipping synthesis");
+    return { error: "TTS rate limit reached." };
   }
 
   const { text, userId, voiceName: preferredVoiceName } = validationResult.data;

@@ -1,6 +1,6 @@
 "use server";
 
-import { GenerationConfig } from "@google/genai";
+import { type GenerateContentConfig } from "@google/genai";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
@@ -19,7 +19,10 @@ import { retry } from "@/lib/retry";
 
 export type ChatHistory = z.infer<typeof MessageSchema>[];
 
-const ChatHistorySchema = z.array(MessageSchema);
+// Length-capped: these actions are billable and any client can call them, so
+// an unbounded history array must not be able to inflate the prompt. The real
+// client sends at most the last 10 messages.
+const ChatHistorySchema = z.array(MessageSchema).max(20);
 const ImageDataUrlSchema = z.string().startsWith("data:image/png;base64,");
 
 // Broadcast a chat message through the EventHub Durable Object (the single
@@ -117,10 +120,11 @@ export const generateAiActionAndChat = async (
     return undefined;
   }
 
+  const validatedHistory = ChatHistorySchema.safeParse(chatHistory);
   if (
     !aiAgentId ||
     !ImageDataUrlSchema.safeParse(imageDataUrl).success ||
-    !ChatHistorySchema.safeParse(chatHistory).success
+    !validatedHistory.success
   ) {
     log.warn("ai.action", "Invalid input to generateAiActionAndChat");
     return undefined;
@@ -128,7 +132,7 @@ export const generateAiActionAndChat = async (
 
   const agent = getAIAgentById(aiAgentId);
   const agentDisplayName = agent?.displayName || aiAgentId;
-  const visionModelConfig = await getActiveVisionModel();
+  const visionModelConfig = getActiveVisionModel();
 
   const base64ImageData = imageDataUrl.split(",")[1];
   if (!base64ImageData) {
@@ -202,20 +206,23 @@ Your response:`;
     },
   ];
 
-  const generationConfig: GenerationConfig = {
+  // @google/genai takes model parameters under `config` (the old SDK's
+  // top-level `generationConfig` field is silently ignored).
+  const config: GenerateContentConfig = {
     temperature: 0.4,
     topP: 0.7,
     topK: 20,
     candidateCount: 1,
-    maxOutputTokens: 150,
+    // Enough headroom that the JSON object never truncates mid-structure —
+    // a cut-off response fails parsing and wastes the whole billable call.
+    maxOutputTokens: 256,
     responseMimeType: "application/json",
   };
 
   const request = {
     model: visionModelConfig.name,
     contents,
-    generationConfig,
-    safetySettings: [],
+    config,
   };
 
   log.debug("ai.action", "Requesting decision", { agent: agentDisplayName });

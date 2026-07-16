@@ -59,7 +59,7 @@ digraph PlaneoSystemOverview {
     scene [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>React Three Fiber scene</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">Scene · Eyes · Boxes · AIAgentViews HUD</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
     hooks [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Hooks</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">useEventSource · useEyePositionReporting<BR/>useAIAgentController · useAiChat</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
     stores [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Zustand stores</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">event · rawEye · eyes · box · chat · aiVision</FONT></TD></TR></TABLE>>, color="#2f80ed", fillcolor="#edf7ff:#ffffff"];
-    transport [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Transport</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">EventSource (SSE in) · sendBeacon / fetch (out)</FONT></TD></TR></TABLE>>];
+    transport [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Transport</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">EventSource (SSE in) · eventEgress POST (out)</FONT></TD></TR></TABLE>>];
     scene -> hooks [style=invis];
     hooks -> stores [style=invis];
     stores -> transport [style=invis];
@@ -90,7 +90,7 @@ digraph PlaneoSystemOverview {
         color="#b8e5c8", fillcolor="#f4fbf6", style="rounded,filled", penwidth=1.8, margin=18
       ];
       pages [label=<<B>Pages / RSC + assets</B>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
-      actions [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Server actions</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">generateMessage · aiControllerActions · tts</FONT></TD></TR></TABLE>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
+      actions [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Server actions</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">generateMessage · tts<BR/>guarded: token · budget · cadence</FONT></TD></TR></TABLE>>, color="#22865a", fillcolor="#eaf8ef:#ffffff"];
     }
 
     subgraph cluster_do {
@@ -120,7 +120,7 @@ digraph PlaneoSystemOverview {
       labelloc=t, labeljust=l,
       color="#b9d8ff", fillcolor="#f5faff", style="rounded,filled", penwidth=1.8, margin=18
     ];
-    gemini [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Google Gemini</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">vision (1.5-flash) · text (2.0-flash-lite)</FONT></TD></TR></TABLE>>];
+    gemini [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Google Gemini</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">gemini-3.1-flash-lite (vision + text, env-overridable)</FONT></TD></TR></TABLE>>];
     gtts [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD><B>Google Cloud TTS</B></TD></TR><TR><TD CELLPADDING="4"><FONT POINT-SIZE="15">REST · Chirp3-HD voices</FONT></TD></TR></TABLE>>];
   }
 

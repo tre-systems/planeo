@@ -14,11 +14,13 @@ live here as Graphviz; small ones live inline as Mermaid in the prose docs.
 
 ## Conventions
 
-Color coding by domain:
+Color coding by domain (shared with the Antenna / swade-toolbox diagram style):
 
 - **Blue** — the browser client (3D scene, stores, hooks) and external APIs.
 - **Green** — server-side code (the Next.js app / server actions).
 - **Teal** — the EventHub Durable Object (the shared-world authority).
+- **Purple** — pure transform code (no I/O, no store writes).
+- **Red** — refusal / error paths (guard rejections, back-off).
 - **Diamonds** — decisions. **Bold green outline** — a terminal render/output.
 
 Fonts: Avenir. Rendered at 220 DPI.

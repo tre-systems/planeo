@@ -16,7 +16,7 @@
     "check:diagrams": "node scripts/check-diagrams.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "prettier --write . && next lint --fix --no-cache && tsc --noEmit && node scripts/check-diagrams.mjs && vitest run",
+    "verify": "next lint --fix --no-cache && prettier --write . && tsc --noEmit && node scripts/check-diagrams.mjs && vitest run",
     "verify:ci": "prettier --check . && next lint --no-cache --max-warnings 0 && tsc --noEmit && node scripts/check-diagrams.mjs && vitest run",
     "check": "npm run verify && playwright test --reporter=list",
     "deps": "npx npm-check-updates",

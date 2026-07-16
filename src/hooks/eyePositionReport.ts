@@ -6,7 +6,6 @@ import type { EyeUpdateType } from "@/domain/event";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
 import { roundVec3, areVec3sEqual } from "@/lib/utils";
 
-
 export interface EyeReportInput {
   id: string;
   name: string;

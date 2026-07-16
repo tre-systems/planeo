@@ -5,6 +5,28 @@ import type { Camera, Scene, WebGLRenderer, WebGLRenderTarget } from "three";
 const CAPTURE_WIDTH = 320;
 const CAPTURE_HEIGHT = 200;
 
+// Captures run ~10×/s per agent on the host's frame loop, so the canvas and
+// pixel buffer are allocated once and reused (captures are synchronous and
+// single-threaded, so sharing is safe).
+let scratchCanvas: HTMLCanvasElement | null = null;
+let scratchPixels: Uint8Array | null = null;
+
+const getScratchCanvas = (): HTMLCanvasElement => {
+  if (!scratchCanvas) {
+    scratchCanvas = document.createElement("canvas");
+    scratchCanvas.width = CAPTURE_WIDTH;
+    scratchCanvas.height = CAPTURE_HEIGHT;
+  }
+  return scratchCanvas;
+};
+
+const getScratchPixels = (): Uint8Array => {
+  if (!scratchPixels) {
+    scratchPixels = new Uint8Array(CAPTURE_WIDTH * CAPTURE_HEIGHT * 4);
+  }
+  return scratchPixels;
+};
+
 // Renders `scene` from `camera` into `renderTarget`, reads back the pixels,
 // flips them vertically (WebGL's origin is bottom-left), draws them to a 2D
 // canvas, and returns a PNG data URL. Restores the renderer's render target
@@ -23,13 +45,11 @@ export const captureView = (
   gl.outputColorSpace = LinearSRGBColorSpace;
   gl.render(scene, camera);
 
-  const captureCanvas = document.createElement("canvas");
-  captureCanvas.width = CAPTURE_WIDTH;
-  captureCanvas.height = CAPTURE_HEIGHT;
+  const captureCanvas = getScratchCanvas();
   const context = captureCanvas.getContext("2d");
 
   if (context) {
-    const imageData = new Uint8Array(CAPTURE_WIDTH * CAPTURE_HEIGHT * 4);
+    const imageData = getScratchPixels();
     gl.readRenderTargetPixels(
       renderTarget,
       0,

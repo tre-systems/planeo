@@ -33,6 +33,11 @@ const useKeyboardControls = () => {
   return keys;
 };
 
+// Scratch vectors reused every frame by the movement loop.
+const scratchDirection = new Vector3();
+const scratchRight = new Vector3();
+const WORLD_UP = new Vector3(0, 1, 0);
+
 const CanvasContent = ({ myId, myName }: { myId: string; myName?: string }) => {
   const { camera } = useThree();
   useEyePositionReporting(myId, myName || myId, camera);
@@ -58,14 +63,12 @@ const CanvasContent = ({ myId, myName }: { myId: string; myName?: string }) => {
   }, [camera]);
 
   useFrame((_, delta) => {
-    const direction = new Vector3();
+    const direction = scratchDirection;
     camera.getWorldDirection(direction);
     direction.y = 0;
     direction.normalize();
 
-    const right = new Vector3()
-      .crossVectors(new Vector3(0, 1, 0), direction)
-      .normalize();
+    const right = scratchRight.crossVectors(WORLD_UP, direction).normalize();
 
     targetVelocity.current.set(0, 0, 0);
     targetRotation.current = 0;
@@ -74,27 +77,19 @@ const CanvasContent = ({ myId, myName }: { myId: string; myName?: string }) => {
 
     if (!isChatInputFocused) {
       if (keyboard.current["w"] || keyboard.current["arrowup"]) {
-        targetVelocity.current.add(
-          new Vector3().copy(direction).multiplyScalar(moveSpeed),
-        );
+        targetVelocity.current.addScaledVector(direction, moveSpeed);
         didInput = true;
       }
       if (keyboard.current["s"] || keyboard.current["arrowdown"]) {
-        targetVelocity.current.add(
-          new Vector3().copy(direction).multiplyScalar(-moveSpeed),
-        );
+        targetVelocity.current.addScaledVector(direction, -moveSpeed);
         didInput = true;
       }
       if (keyboard.current["q"]) {
-        targetVelocity.current.add(
-          new Vector3().copy(right).multiplyScalar(moveSpeed),
-        );
+        targetVelocity.current.addScaledVector(right, moveSpeed);
         didInput = true;
       }
       if (keyboard.current["e"]) {
-        targetVelocity.current.add(
-          new Vector3().copy(right).multiplyScalar(-moveSpeed),
-        );
+        targetVelocity.current.addScaledVector(right, -moveSpeed);
         didInput = true;
       }
 

@@ -6,7 +6,7 @@ import { EyeUpdateType } from "@/domain/event";
 import { exposeStoreForDebug } from "@/lib/exposeStore";
 
 export interface RawEyeEventState {
-  eyes: Record<string, { p?: Vec3; l?: Vec3; t: number }>;
+  eyes: Record<string, { p?: Vec3; l?: Vec3; name?: string; t: number }>;
 }
 
 interface RawEyeEventActions {
@@ -22,14 +22,23 @@ export const useRawEyeEventStore = create<
     setEye: (eyeUpdate) =>
       set((state) => {
         if (eyeUpdate.p || eyeUpdate.l) {
-          const newEyeData: { p?: Vec3; l?: Vec3; t: number } = {
+          // Merge over the existing record so a partial update (e.g. lookAt
+          // only) keeps the previously known position and name.
+          const existing = state.eyes[eyeUpdate.id];
+          const newEyeData: { p?: Vec3; l?: Vec3; name?: string; t: number } = {
             t: eyeUpdate.t,
           };
-          if (eyeUpdate.p) {
-            newEyeData.p = eyeUpdate.p;
+          const p = eyeUpdate.p ?? existing?.p;
+          const l = eyeUpdate.l ?? existing?.l;
+          const name = eyeUpdate.name ?? existing?.name;
+          if (p) {
+            newEyeData.p = p;
           }
-          if (eyeUpdate.l) {
-            newEyeData.l = eyeUpdate.l;
+          if (l) {
+            newEyeData.l = l;
+          }
+          if (name) {
+            newEyeData.name = name;
           }
           state.eyes[eyeUpdate.id] = newEyeData;
         }

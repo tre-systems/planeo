@@ -41,6 +41,7 @@ export const throttle = <T extends (...args: any[]) => any>(
 ) => Promise<Awaited<ReturnType<T>> | undefined>) => {
   let lastFunc: NodeJS.Timeout | undefined;
   let lastRan: number | undefined;
+  let supersededResolve: ((value: undefined) => void) | undefined;
 
   return async (
     ...args: Parameters<T>
@@ -56,10 +57,15 @@ export const throttle = <T extends (...args: any[]) => any>(
     } else {
       if (lastFunc) {
         clearTimeout(lastFunc);
+        // Settle the superseded call's promise; a cleared timer would
+        // otherwise leave it pending forever.
+        supersededResolve?.(undefined);
       }
       return new Promise((resolve) => {
+        supersededResolve = resolve;
         lastFunc = setTimeout(
           async () => {
+            supersededResolve = undefined;
             if (Date.now() - (lastRan ?? 0) >= limit) {
               lastRan = Date.now();
               resolve(await execute());

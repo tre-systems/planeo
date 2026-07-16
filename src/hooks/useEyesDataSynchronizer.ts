@@ -33,10 +33,23 @@ const fragmentShader = `
   }
 `;
 
+// Matches the server's PURGE_INTERVAL_MS / EYE_MAX_AGE_MS (eventHub.ts): the
+// DO purges stale eyes silently (no removal event is broadcast), so each
+// client must run the same sweep or departed users' eyes float forever.
+const EYE_PURGE_INTERVAL_MS = 10_000;
+const EYE_MAX_AGE_MS = 30_000;
+
 export const useEyesDataSynchronizer = (myId: string) => {
   const rawEyesData = useRawEyeEventStore((state) => state.eyes);
   const { syncEyes } = useEyesStore.getState();
   const [eyeTexture, setEyeTexture] = useState<Texture | null>(null);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      useRawEyeEventStore.getState().removeStaleEyes(EYE_MAX_AGE_MS);
+    }, EYE_PURGE_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     const loader = new TextureLoader();
@@ -78,6 +91,7 @@ export const useEyesDataSynchronizer = (myId: string) => {
       id,
       p: data.p,
       l: data.l,
+      name: data.name,
       t: data.t,
     }));
     // Sync even when empty so eyesStore clears eyes as rawEyesData empties.

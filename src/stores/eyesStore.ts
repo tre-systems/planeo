@@ -185,6 +185,9 @@ export const useEyesStore = create<EyesState & EyesActions>()(
               (TARGET_SCALE - INITIAL_SCALE) * Math.max(eye.opacity, 0);
 
             if (eye.opacity <= 0) {
+              // The material is a per-eye clone rendered via <primitive>, so
+              // R3F won't dispose it — release the GPU program reference here.
+              eye.material.dispose();
               delete state.managedEyes[id];
               continue;
             }

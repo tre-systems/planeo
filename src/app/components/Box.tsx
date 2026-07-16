@@ -49,6 +49,10 @@ const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box, isHost }) => {
     return `material-${randomIndex}`;
   });
 
+  // Baseline the send threshold once per box (mount / identity change) only.
+  // Re-running on every pose change would overwrite the last *transmitted*
+  // pose with the locally lerped echo, inflating deltas and causing redundant
+  // sends; handleUpdate maintains the refs on every real send.
   useEffect(() => {
     lastTransmittedPRef.current = box.currentP.toArray();
     lastTransmittedORef.current = [
@@ -56,7 +60,8 @@ const SyncedRigidBox: React.FC<SyncedRigidBoxProps> = ({ box, isHost }) => {
       box.currentO.y,
       box.currentO.z,
     ];
-  }, [box.id, box.currentP, box.currentO.x, box.currentO.y, box.currentO.z]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [box.id]);
 
   const handleUpdate = useCallback(
     (rb: RapierRigidBody) => {
@@ -209,8 +214,10 @@ export const ServerDrivenBoxes = ({ myId }: { myId: string }) => {
     (state: { boxes: Map<string, AnimatedBoxState> }) => state.boxes,
   );
   const updateBoxAnimations = useBoxStore((state) => state.updateBoxAnimations);
-  // Only the host simulates box physics; everyone else renders them kinematically.
-  const isHost = useEventStore((s) => s.hostId) === myId;
+  // Only the host simulates box physics; everyone else renders them
+  // kinematically. Gated on isConnected so a stale election can't leave two
+  // clients simulating at once.
+  const isHost = useEventStore((s) => s.isConnected && s.hostId === myId);
 
   const serverBoxesArray: AnimatedBoxState[] = Array.from(boxesMap.values());
 

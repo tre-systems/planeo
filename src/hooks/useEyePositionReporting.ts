@@ -5,6 +5,7 @@ import { ValidatedEyeUpdatePayloadSchema } from "@/domain/event";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
 import { log } from "@/lib/log";
 import { roundVec3, areVec3sEqual } from "@/lib/utils";
+import { postWorldEvent } from "@/lib/worldAuth";
 
 import type { EyeUpdateType } from "@/domain";
 import type { Camera } from "@react-three/fiber";
@@ -75,7 +76,7 @@ export const useEyePositionReporting = (
         details: parsedInitial.error.flatten(),
       });
     } else {
-      navigator.sendBeacon?.("/api/events", JSON.stringify(parsedInitial.data));
+      postWorldEvent(parsedInitial.data);
       lastSentPositionRef.current = initialPositionRounded;
       lastSentLookAtRef.current = initialLookAtRounded;
       forcePositionUpdateCounterRef.current = 0;
@@ -150,7 +151,7 @@ export const useEyePositionReporting = (
               details: parsed.error.flatten(),
             });
           } else {
-            navigator.sendBeacon?.("/api/events", JSON.stringify(parsed.data));
+            postWorldEvent(parsed.data);
           }
         }
 

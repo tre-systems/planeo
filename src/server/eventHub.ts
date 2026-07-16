@@ -37,10 +37,14 @@ const encoder = new TextEncoder();
 
 const PURGE_INTERVAL_MS = 10_000;
 const EYE_MAX_AGE_MS = 30_000;
+// A consumer that stops reading its SSE stream would otherwise buffer every
+// broadcast in DO memory; past this many unacknowledged writes it is dropped.
+const MAX_PENDING_WRITES = 256;
 
 type Subscriber = {
   writer: WritableStreamDefaultWriter<Uint8Array>;
   clientId: string;
+  pendingWrites: number;
 };
 
 export class EventHub extends DurableObject<Env> {
@@ -49,7 +53,6 @@ export class EventHub extends DurableObject<Env> {
   private readonly subs = new Set<Subscriber>();
 
   private boxesInitialized = false;
-  private agentsInitialized = false;
 
   // The oldest connected client is the simulation host (drives the AI agents
   // and the box physics); re-elected when it disconnects.
@@ -92,13 +95,20 @@ export class EventHub extends DurableObject<Env> {
     this.seedAgents();
     this.purgeStale();
 
+    // `||` (not `??`): an empty `?id=` must also fall back, or "" becomes a
+    // valid client id that can win host election while `if (this.host)`
+    // suppresses the broadcast — freezing the simulation for everyone.
     const clientId =
-      new URL(request.url).searchParams.get("id") ?? crypto.randomUUID();
+      new URL(request.url).searchParams.get("id") || crypto.randomUUID();
     const { readable, writable } = new TransformStream<
       Uint8Array,
       Uint8Array
     >();
-    const subscriber: Subscriber = { writer: writable.getWriter(), clientId };
+    const subscriber: Subscriber = {
+      writer: writable.getWriter(),
+      clientId,
+      pendingWrites: 0,
+    };
     this.subs.add(subscriber);
     this.electHost();
     log.debug("hub", "subscriber added", {
@@ -126,9 +136,20 @@ export class EventHub extends DurableObject<Env> {
   }
 
   private writeTo(subscriber: Subscriber, msg: unknown): void {
+    if (subscriber.pendingWrites >= MAX_PENDING_WRITES) {
+      log.warn("hub", "subscriber write queue full; dropping", {
+        clientId: subscriber.clientId,
+      });
+      this.drop(subscriber);
+      return;
+    }
+    subscriber.pendingWrites++;
     subscriber.writer
       .write(encoder.encode(`data:${JSON.stringify(msg)}\n\n`))
-      .catch(() => this.drop(subscriber));
+      .then(
+        () => subscriber.pendingWrites--,
+        () => this.drop(subscriber),
+      );
   }
 
   private drop(subscriber: Subscriber): void {
@@ -206,6 +227,13 @@ export class EventHub extends DurableObject<Env> {
         );
       }
       this.setBox(validated.data.id, validated.data.p, validated.data.o);
+    } else {
+      // "box" and "host" are server → client only; accepting them silently
+      // would hide client protocol drift.
+      return Response.json(
+        { error: "Unsupported event type" },
+        { status: 400 },
+      );
     }
 
     return Response.json({ ok: true });
@@ -251,9 +279,10 @@ export class EventHub extends DurableObject<Env> {
     this.boxesInitialized = true;
   }
 
+  // Runs on every stream open (not one-shot): the stale-eye purge removes
+  // agent eyes when no host has been posting updates, and a world whose seeds
+  // could never return would stay agentless until the DO is evicted.
   private seedAgents(): void {
-    if (this.agentsInitialized) return;
-    this.agentsInitialized = true;
     if (this.totalAgents <= 0) return;
 
     const seeds = buildAgentSeedEyes(

@@ -9,6 +9,17 @@ import { useEyesStore, ManagedEye } from "@/stores/eyesStore";
 
 import { Eye } from "./Eye";
 
+// Scratch objects reused across every eye every frame (the loop is
+// synchronous, so sharing is safe) — avoids ~6 allocations per eye per frame.
+const UP = new Vector3(0, 1, 0);
+const IDENTITY_ROTATION = new Quaternion().setFromEuler(new Euler(0, 0, 0));
+const scratchCurrentPosition = new Vector3();
+const scratchTargetPosition = new Vector3();
+const scratchEyePosition = new Vector3();
+const scratchTargetRotation = new Quaternion();
+const scratchCurrentRotation = new Quaternion();
+const scratchMatrix = new Matrix4();
+
 export const Eyes = () => {
   const refs = useRef<Record<string, React.RefObject<RapierRigidBody | null>>>(
     {},
@@ -46,56 +57,49 @@ export const Eyes = () => {
       if (!rigidBody) continue;
 
       const rbTranslation = rigidBody.translation();
-      const currentPositionVec = new Vector3(
+      scratchCurrentPosition.set(
         rbTranslation.x,
         rbTranslation.y,
         rbTranslation.z,
       );
-      const targetPosition = new Vector3(
+      scratchTargetPosition.set(
         eyeData.position.x,
         EYE_Y_POSITION,
         eyeData.position.z,
       );
-      if (currentPositionVec.distanceTo(targetPosition) > 0.001) {
-        rigidBody.setNextKinematicTranslation(targetPosition);
+      if (scratchCurrentPosition.distanceTo(scratchTargetPosition) > 0.001) {
+        rigidBody.setNextKinematicTranslation(scratchTargetPosition);
       }
 
       if (eyeData.lookAt) {
-        const targetRotation = new Quaternion();
-        const tempLookAtPosition = new Vector3().copy(eyeData.lookAt);
-        const eyePosition = new Vector3(
+        scratchEyePosition.set(
           rbTranslation.x,
           EYE_Y_POSITION,
           rbTranslation.z,
         );
-
-        const m4 = new Matrix4();
-        m4.lookAt(eyePosition, tempLookAtPosition, new Vector3(0, 1, 0));
-        targetRotation.setFromRotationMatrix(m4);
+        scratchMatrix.lookAt(scratchEyePosition, eyeData.lookAt, UP);
+        scratchTargetRotation.setFromRotationMatrix(scratchMatrix);
 
         const currentRotationQuat = rigidBody.rotation();
-        const currentRotation = new Quaternion(
+        scratchCurrentRotation.set(
           currentRotationQuat.x,
           currentRotationQuat.y,
           currentRotationQuat.z,
           currentRotationQuat.w,
         );
-        if (!currentRotation.equals(targetRotation)) {
-          rigidBody.setNextKinematicRotation(targetRotation);
+        if (!scratchCurrentRotation.equals(scratchTargetRotation)) {
+          rigidBody.setNextKinematicRotation(scratchTargetRotation);
         }
       } else {
-        const fallbackRotation = new Quaternion().setFromEuler(
-          new Euler(0, 0, 0),
-        );
         const currentRotationQuat = rigidBody.rotation();
-        const currentRotation = new Quaternion(
+        scratchCurrentRotation.set(
           currentRotationQuat.x,
           currentRotationQuat.y,
           currentRotationQuat.z,
           currentRotationQuat.w,
         );
-        if (!currentRotation.equals(fallbackRotation)) {
-          rigidBody.setNextKinematicRotation(fallbackRotation);
+        if (!scratchCurrentRotation.equals(IDENTITY_ROTATION)) {
+          rigidBody.setNextKinematicRotation(IDENTITY_ROTATION);
         }
       }
 

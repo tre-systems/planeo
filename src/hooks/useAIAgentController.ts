@@ -10,7 +10,7 @@ import { ValidatedEyeUpdatePayloadSchema } from "@/domain/event";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
 import { log } from "@/lib/log";
 import { roundArray } from "@/lib/utils";
-import { worldWriteHeaders, worldWriteToken } from "@/lib/worldAuth";
+import { postWorldEvent, worldWriteToken } from "@/lib/worldAuth";
 import { useAIVisionStore } from "@/stores/aiVisionStore";
 import { useCommunicationStore } from "@/stores/communicationStore";
 import { useEventStore } from "@/stores/eventStore";
@@ -36,8 +36,9 @@ export const useAIAgentController = (myId: string) => {
   const agents = getAIAgents();
   // Only the elected host drives the AI agents (renders their views, requests
   // decisions, and broadcasts movement). Everyone else just watches the agents
-  // move via the eyeUpdate events the host posts to the DO.
-  const isHost = useEventStore((s) => s.hostId) === myId;
+  // move via the eyeUpdate events the host posts to the DO. The isConnected
+  // gate stops a disconnected ex-host from double-driving on a stale election.
+  const isHost = useEventStore((s) => s.isConnected && s.hostId === myId);
   const messages = useCommunicationStore((s) => s.messages);
   const managedEyes = useEyesStore((s) => s.managedEyes);
   const updateAIAgentTarget = useEyesStore((s) => s.updateAIAgentTarget);
@@ -51,6 +52,10 @@ export const useAIAgentController = (myId: string) => {
   const decisionProcessingLock = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    // Cameras and render targets are only used by the host's capture loop;
+    // creating them on viewer clients would waste GPU memory. On host loss
+    // the cleanup below disposes them.
+    if (!isHost) return;
     agents.forEach((agent) => {
       if (!aiCameraRefs.current[agent.id]) {
         const cam = new PerspectiveCamera(
@@ -84,7 +89,7 @@ export const useAIAgentController = (myId: string) => {
       aiRenderTargetRefs.current = {};
       aiCameraRefs.current = {};
     };
-  }, [agents, gl]);
+  }, [agents, gl, isHost]);
 
   const extractImageDataFromRenderer = useCallback(
     (agentId: string): string | null => {
@@ -186,23 +191,8 @@ export const useAIAgentController = (myId: string) => {
                   details: parsedPayload.error.flatten(),
                 },
               );
-            } else if (navigator.sendBeacon && !worldWriteToken()) {
-              // sendBeacon cannot carry the Authorization header, so it is only
-              // usable when the world has no write token configured.
-              navigator.sendBeacon(
-                "/api/events",
-                JSON.stringify(parsedPayload.data),
-              );
             } else {
-              fetch("/api/events", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  ...worldWriteHeaders(),
-                },
-                body: JSON.stringify(parsedPayload.data),
-                keepalive: true,
-              }).catch((err) =>
+              postWorldEvent(parsedPayload.data, (err) =>
                 log.error("ai.controller", "Fallback eyeUpdate fetch failed", {
                   agentId,
                   error: String(err),

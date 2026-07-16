@@ -36,8 +36,10 @@ read-only SSE stream. Leave both unset for private local play.
   agent. With the default `gemini-3.1-flash-lite` and two agents, a 2-hour
   stream costs on the order of £1–2 of API usage. Cost scales linearly with
   `TOTAL_AGENTS` and inversely with the decision interval.
-- `RATE_LIMIT_TTS_HOURLY` (default 240) caps billable TTS synthesis calls per
-  rolling hour.
+- `RATE_LIMIT_AI_HOURLY` (default 2000) caps billable Gemini calls per rolling
+  hour, and `RATE_LIMIT_TTS_HOURLY` (default 240) does the same for TTS
+  synthesis. With `WORLD_WRITE_TOKEN` set, the AI actions also refuse callers
+  without the token.
 - Stream in scheduled blocks rather than 24/7; close the host tab and the
   agent loop stops with it.
 

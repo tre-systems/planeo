@@ -8,6 +8,7 @@ import { z } from "zod";
 import { AIResponseSchema, type ParsedAIResponse } from "@/domain/aiAction";
 import { isAIAgentId, getAIAgentById } from "@/domain/aiAgent";
 import { Message, MessageSchema } from "@/domain/message";
+import { aiCallBlocked } from "@/lib/aiGuard";
 import {
   getGoogleAIClient,
   getActiveVisionModel,
@@ -50,7 +51,14 @@ const postChatMessageToEvents = async (message: Message): Promise<void> => {
 export const generateAiChatMessage = async (
   chatHistory: ChatHistory,
   aiUserId: string,
+  writeToken?: string,
 ): Promise<Message | undefined> => {
+  const blocked = aiCallBlocked(writeToken);
+  if (blocked) {
+    log.warn("ai.chat", "Refusing AI chat call", { reason: blocked });
+    return undefined;
+  }
+
   const validated = ChatHistorySchema.safeParse(chatHistory);
   if (!validated.success || !aiUserId) {
     log.warn("ai.chat", "Invalid input to generateAiChatMessage");
@@ -101,7 +109,14 @@ export const generateAiActionAndChat = async (
   aiAgentId: string,
   imageDataUrl: string,
   chatHistory: ChatHistory,
+  writeToken?: string,
 ): Promise<ParsedAIResponse | undefined> => {
+  const blocked = aiCallBlocked(writeToken);
+  if (blocked) {
+    log.warn("ai.action", "Refusing AI decision call", { reason: blocked });
+    return undefined;
+  }
+
   if (
     !aiAgentId ||
     !ImageDataUrlSchema.safeParse(imageDataUrl).success ||

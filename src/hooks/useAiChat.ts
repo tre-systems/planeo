@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { generateAiChatMessage } from "@/app/actions/generateMessage";
 import { getAIAgents, isAIAgentId } from "@/domain/aiAgent";
 import { log } from "@/lib/log";
+import { worldWriteToken } from "@/lib/worldAuth";
 import { useCommunicationStore } from "@/stores/communicationStore";
 
 export const useAiChat = (myId: string) => {
@@ -41,7 +42,11 @@ export const useAiChat = (myId: string) => {
         });
         try {
           const currentChatHistory = [...messages];
-          await generateAiChatMessage(currentChatHistory, respondingAgentId);
+          await generateAiChatMessage(
+            currentChatHistory,
+            respondingAgentId,
+            worldWriteToken(),
+          );
         } catch (error) {
           log.error("ai.chat", "Error getting AI response", {
             error: String(error),

@@ -139,6 +139,7 @@ export const useAIAgentController = (myId: string) => {
           agentId,
           imageDataUrl,
           chatHistory,
+          worldWriteToken(),
         );
 
         if (movementAction && movementAction.type !== "none") {

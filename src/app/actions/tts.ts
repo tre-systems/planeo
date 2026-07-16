@@ -40,7 +40,7 @@ const chirp3Voices = [
 ];
 
 const SynthesizeSpeechParamsSchema = z.object({
-  text: z.string().min(1, "Text cannot be empty."),
+  text: z.string().min(1, "Text cannot be empty.").max(1000, "Text too long."),
   userId: z.string().min(1, "User ID cannot be empty."),
   voiceName: z.string().optional(),
 });

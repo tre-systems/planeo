@@ -10,11 +10,13 @@ export const requestAiDecision = async (
   aiAgentId: string,
   imageDataUrl: string,
   chatHistory: ChatHistory,
+  writeToken?: string,
 ): Promise<ParsedAIResponse["action"]> => {
   const decision = await generateAiActionAndChat(
     aiAgentId,
     imageDataUrl,
     chatHistory,
+    writeToken,
   );
 
   if (decision) {

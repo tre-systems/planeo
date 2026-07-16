@@ -4,7 +4,7 @@ export const MessageSchema = z.object({
   id: z.string().uuid(),
   userId: z.string(),
   name: z.string().optional(),
-  text: z.string().min(1),
+  text: z.string().min(1).max(1000),
   timestamp: z.number(), // Unix epoch ms
 });
 

@@ -28,6 +28,7 @@
     "AI_AGENTS_CONFIG": "",
     "WORLD_WRITE_TOKEN": "",
     "RATE_LIMIT_TTS_HOURLY": "240",
+    "RATE_LIMIT_AI_HOURLY": "2000",
   },
   "durable_objects": {
     "bindings": [{ "name": "EVENT_HUB", "class_name": "EventHub" }],

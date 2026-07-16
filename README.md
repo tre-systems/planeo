@@ -10,11 +10,13 @@
 
 Planeo is an interactive 3D web application where users and AI agents coexist and interact in a shared environment. It showcases real-time multi-user communication, AI-driven agents with vision and speech capabilities, and a dynamic physics-based world.
 
+Planeo is designed to be self-hosted: run it locally or deploy your own instance with your own API keys. Public showcases happen as livestreams (see [docs/STREAMING.md](docs/STREAMING.md)) rather than a shared hosted world — a continuously running vision-model loop is billable, so each world runs on its owner's budget. With `WORLD_WRITE_TOKEN` set, a deployed world is writable only by token-holders and everyone else is a read-only spectator.
+
 ## Core Features
 
 - **3D Environment:** Interactive 3D space built with React Three Fiber.
 - **Real-time Multi-user Interaction:** See other users' movements (represented as eyeballs) in real-time using Server-Sent Events (SSE).
-- **AI Agents with Vision, Actions & Speech:** AI agents (configurable, default to "Orion" and "Nova") perceive their surroundings, generate chat messages, and perform actions (like moving or turning). Their visual perspective updates at ~10 FPS and a Gemini decision is made roughly every 5 seconds.
+- **AI Agents with Vision, Actions & Speech:** AI agents (configurable, default to "Orion" and "Nova") perceive their surroundings, generate chat messages, and perform actions (like moving or turning). Their visual perspective updates at ~10 FPS and a Gemini decision is made roughly every 5 seconds. Models default to `gemini-3.1-flash-lite` and are overridable via `GOOGLE_TEXT_MODEL` / `GOOGLE_VISION_MODEL`.
 - **Chat Functionality:** View messages from AI agents in a shared chat window.
 - **Text-to-Speech (TTS):** AI chat messages are spoken aloud using Google Cloud TTS (Chirp3 voices), with a distinct voice assigned per speaker. Requires `GOOGLE_APP_CREDS_JSON`; disable by setting `NEXT_PUBLIC_TTS_ENABLED=false`.
 - **Keyboard Navigation:** Control your camera movement and orientation using keyboard inputs.

@@ -106,12 +106,39 @@ const performSynthesis = async (
   }
 };
 
+// Global TTS spend guard: a rolling one-hour window of synthesis timestamps.
+// Every call is billable, and this action is otherwise reachable by any client,
+// so cap the worst case. In-memory state is exact on a single server (the
+// laptop/self-host case) and best-effort per isolate on Workers — a budget
+// circuit-breaker, not an auth boundary.
+const TTS_RATE_WINDOW_MS = 60 * 60 * 1000;
+const ttsCallTimes: number[] = [];
+
+const ttsRateLimited = (): boolean => {
+  const limit = Number.parseInt(
+    process.env["RATE_LIMIT_TTS_HOURLY"] || "240",
+    10,
+  );
+  const cutoff = Date.now() - TTS_RATE_WINDOW_MS;
+  while (ttsCallTimes.length > 0 && ttsCallTimes[0] < cutoff) {
+    ttsCallTimes.shift();
+  }
+  if (ttsCallTimes.length >= limit) return true;
+  ttsCallTimes.push(Date.now());
+  return false;
+};
+
 export const synthesizeSpeechAction = async (
   params: SynthesizeSpeechParams,
 ): Promise<SynthesizeSpeechResult> => {
   const ttsEnabled = process.env["NEXT_PUBLIC_TTS_ENABLED"] !== "false";
   if (!ttsEnabled) {
     return { audioBase64: "", error: "TTS is disabled." };
+  }
+
+  if (ttsRateLimited()) {
+    log.warn("tts", "Hourly TTS rate limit reached; skipping synthesis");
+    return { error: "TTS rate limit reached." };
   }
 
   const validationResult = SynthesizeSpeechParamsSchema.safeParse(params);

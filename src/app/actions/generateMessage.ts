@@ -28,9 +28,16 @@ const postChatMessageToEvents = async (message: Message): Promise<void> => {
   try {
     const { env } = getCloudflareContext();
     const stub = env.EVENT_HUB.get(env.EVENT_HUB.idFromName("global"));
+    // Server-side writer: present the write token when the world requires one.
+    const token =
+      process.env["WORLD_WRITE_TOKEN"] ||
+      process.env["NEXT_PUBLIC_WORLD_WRITE_TOKEN"];
     await stub.fetch("https://event-hub/api/events", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ ...message, type: "chatMessage" as const }),
     });
   } catch (error) {

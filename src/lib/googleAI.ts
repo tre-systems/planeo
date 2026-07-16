@@ -34,10 +34,15 @@ export const getGoogleAIClient = async (): Promise<GoogleGenAI> => {
 // Config for the active text-generation model. These getters stay async because
 // this is a "use server" module — every exported function is a Server Action and
 // must be async (Next rejects a sync export at build time).
+//
+// Defaults target Gemini 3.1 Flash-Lite — the cheapest current multimodal tier,
+// right for a high-volume agent loop. Override per deployment via env
+// (GOOGLE_TEXT_MODEL / GOOGLE_VISION_MODEL) so model churn never needs a code
+// change: Google retires model ids aggressively (every 1.5 and 2.0 id now 404s).
 const getActiveTextModel = async () => {
   return {
     provider: "google",
-    name: "gemini-2.0-flash-lite",
+    name: process.env["GOOGLE_TEXT_MODEL"] || "gemini-3.1-flash-lite",
   };
 };
 
@@ -45,7 +50,7 @@ const getActiveTextModel = async () => {
 export const getActiveVisionModel = async () => {
   return {
     provider: "google",
-    name: "gemini-1.5-flash-latest",
+    name: process.env["GOOGLE_VISION_MODEL"] || "gemini-3.1-flash-lite",
   };
 };
 

@@ -154,6 +154,16 @@ export class EventHub extends DurableObject<Env> {
   // --- POST: ingest client/AI events ---------------------------------------
 
   private async handlePost(request: Request): Promise<Response> {
+    // Optional write gate: with WORLD_WRITE_TOKEN set, only bearers may post
+    // events — everyone else stays a read-only spectator on the SSE stream.
+    const requiredToken = (this.env.WORLD_WRITE_TOKEN as string) || "";
+    if (requiredToken) {
+      const auth = request.headers.get("authorization") ?? "";
+      if (auth !== `Bearer ${requiredToken}`) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
     let payload: unknown;
     try {
       payload = await request.json();

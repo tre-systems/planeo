@@ -15,6 +15,7 @@ import {
 import { exposeStoreForDebug } from "@/lib/exposeStore";
 import { log } from "@/lib/log";
 import { throttle } from "@/lib/utils";
+import { worldWriteHeaders } from "@/lib/worldAuth";
 
 import { useBoxStore } from "./boxStore";
 import { useRawEyeEventStore } from "./rawEyeEventStore";
@@ -37,6 +38,7 @@ const postEvent = async (
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...worldWriteHeaders(),
       },
       body: JSON.stringify(parsedData),
     });

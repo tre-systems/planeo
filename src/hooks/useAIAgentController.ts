@@ -10,6 +10,7 @@ import { ValidatedEyeUpdatePayloadSchema } from "@/domain/event";
 import { EYE_Y_POSITION } from "@/domain/sceneConstants";
 import { log } from "@/lib/log";
 import { roundArray } from "@/lib/utils";
+import { worldWriteHeaders, worldWriteToken } from "@/lib/worldAuth";
 import { useAIVisionStore } from "@/stores/aiVisionStore";
 import { useCommunicationStore } from "@/stores/communicationStore";
 import { useEventStore } from "@/stores/eventStore";
@@ -184,7 +185,9 @@ export const useAIAgentController = (myId: string) => {
                   details: parsedPayload.error.flatten(),
                 },
               );
-            } else if (navigator.sendBeacon) {
+            } else if (navigator.sendBeacon && !worldWriteToken()) {
+              // sendBeacon cannot carry the Authorization header, so it is only
+              // usable when the world has no write token configured.
               navigator.sendBeacon(
                 "/api/events",
                 JSON.stringify(parsedPayload.data),
@@ -192,7 +195,10 @@ export const useAIAgentController = (myId: string) => {
             } else {
               fetch("/api/events", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  ...worldWriteHeaders(),
+                },
                 body: JSON.stringify(parsedPayload.data),
                 keepalive: true,
               }).catch((err) =>

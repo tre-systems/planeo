@@ -15,12 +15,19 @@
     "enabled": true,
   },
   "routes": [{ "pattern": "planeo.tre.systems", "custom_domain": true }],
-  // Non-secret world config. Secrets (GOOGLE_AI_API_KEY, GOOGLE_APP_CREDS_JSON)
-  // are set with `wrangler secret put` (or .dev.vars locally).
+  // Non-secret world config. Secrets (GOOGLE_AI_API_KEY, GOOGLE_APP_CREDS_JSON,
+  // and WORLD_WRITE_TOKEN when write-gating a public deployment) are set with
+  // `wrangler secret put` (or .dev.vars locally). WORLD_WRITE_TOKEN empty =
+  // anyone may post events; set = posts require the bearer token and everyone
+  // else is a read-only spectator. GOOGLE_TEXT_MODEL / GOOGLE_VISION_MODEL
+  // override the model defaults in src/lib/googleAI.ts. RATE_LIMIT_TTS_HOURLY
+  // caps global TTS synthesis calls per rolling hour.
   "vars": {
     "NUMBER_OF_BOXES": "5",
     "TOTAL_AGENTS": "2",
     "AI_AGENTS_CONFIG": "",
+    "WORLD_WRITE_TOKEN": "",
+    "RATE_LIMIT_TTS_HOURLY": "240",
   },
   "durable_objects": {
     "bindings": [{ "name": "EVENT_HUB", "class_name": "EventHub" }],

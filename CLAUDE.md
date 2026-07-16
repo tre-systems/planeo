@@ -11,7 +11,8 @@ Key reflexes for Planeo:
   confirm CI is green and verify runtime behavior with `npm run preview` (or
   smoke-test the live app if deploy is re-enabled). Docs-only changes just need
   commit + push.
-- The gate before pushing is `npm run verify` (prettier, lint, `tsc --noEmit`);
+- The gate before pushing is `npm run verify` (prettier, lint, `tsc --noEmit`,
+  diagram check, vitest unit tests); CI runs the non-fixing `verify:ci`.
   `npm run check` adds the Playwright e2e suite. `npm run preview` exercises the
   full Workers runtime including the `EventHub` Durable Object.
 - All real-time state lives in one `EventHub` Durable Object

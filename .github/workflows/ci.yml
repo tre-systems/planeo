@@ -25,8 +25,8 @@ jobs:
       - run: npm ci
       - name: Install Graphviz
         run: sudo apt-get update && sudo apt-get install -y graphviz
-      - name: Verify (prettier, lint, tsc, diagrams)
-        run: npm run verify
+      - name: Verify (prettier check, lint, tsc, diagrams, unit tests)
+        run: npm run verify:ci
 
   e2e:
     name: End-to-end (Playwright)

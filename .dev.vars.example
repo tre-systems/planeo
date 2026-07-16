@@ -9,3 +9,18 @@ GOOGLE_AI_API_KEY=
 
 # Google Cloud service-account JSON (single line) for Cloud TTS. Optional.
 GOOGLE_APP_CREDS_JSON=
+
+# Optional write gate: with WORLD_WRITE_TOKEN set, only bearers may POST
+# events or invoke the billable Gemini actions; everyone else is a read-only
+# spectator. NEXT_PUBLIC_WORLD_WRITE_TOKEN is inlined into the client bundle
+# at build time — only set it on trusted-writer builds.
+# WORLD_WRITE_TOKEN=
+# NEXT_PUBLIC_WORLD_WRITE_TOKEN=
+
+# Optional Gemini model overrides (defaults: gemini-3.1-flash-lite).
+# GOOGLE_TEXT_MODEL=
+# GOOGLE_VISION_MODEL=
+
+# Optional rolling one-hour budgets for the billable actions.
+# RATE_LIMIT_AI_HOURLY=2000
+# RATE_LIMIT_TTS_HOURLY=240

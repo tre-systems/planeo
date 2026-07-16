@@ -9,8 +9,10 @@ test.describe("Visual Snapshots", () => {
 
     await page.waitForTimeout(3000);
 
+    // Diagnostic artifact only — test-results/ is gitignored. (The committed
+    // screenshots/ folder holds the README image; tests must not rewrite it.)
     await page.screenshot({
-      path: "screenshots/loaded.png",
+      path: "test-results/loaded.png",
       fullPage: true,
     });
 

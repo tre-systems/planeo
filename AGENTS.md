@@ -45,7 +45,10 @@ Read before substantial work:
 ## Verification
 
 - **Gate before pushing:** `npm run verify` — `prettier --write .`,
-  `next lint --fix`, and `tsc --noEmit`. This is what CI's `check` job runs.
+  `next lint --fix`, `tsc --noEmit`, the diagram render check, and the vitest
+  unit tests. CI's `check` job runs `verify:ci`, the non-fixing equivalent
+  (`prettier --check`, `next lint --max-warnings 0`) — so run `verify` locally
+  or CI will fail on anything it would have auto-fixed.
 - `npm run check` runs `verify` plus the Playwright suite (`--reporter=list`);
   use it when a change could affect runtime behavior.
 - `npm run preview` builds with OpenNext and serves the full Workers runtime
@@ -102,11 +105,12 @@ Read before substantial work:
 
 ## Tests
 
-- End-to-end only, Playwright in [`tests/`](tests/) (`basic`, `api`,
-  `visual-snapshot`). `npm run test:e2e` boots the dev server automatically;
-  first run needs `npx playwright install`.
-- There are no unit tests. The domain schemas and the SSE store are the
-  highest-value targets if adding them (see the backlog).
+- Unit tests: vitest (`npm test`) covers the pure logic — domain schemas,
+  `eventHubLogic`, agent movement math, `retry`.
+- End-to-end: Playwright in [`tests/`](tests/) (`basic`, `api`,
+  `visual-snapshot`). `npm run test:e2e` boots the OpenNext preview server
+  (full Workers runtime) automatically; first run needs
+  `npx playwright install`.
 
 ## Commits
 

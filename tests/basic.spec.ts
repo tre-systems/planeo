@@ -32,6 +32,11 @@ test.describe("Multi-User Event Synchronization", () => {
     await expect(page2).toHaveTitle(/Planeo/);
   });
 
+  test.afterEach(async () => {
+    await page1.context().close();
+    await page2.context().close();
+  });
+
   test("synchronizes eye updates between two users", async ({ request }) => {
     const user1EyeId = "user1-eye-test";
     const user1EyePos: [number, number, number] = [10, 20, 30];

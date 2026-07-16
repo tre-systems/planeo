@@ -235,8 +235,8 @@ whatever `AI_AGENTS_CONFIG` defines ([`src/domain/aiAgent.ts`](src/domain/aiAgen
 Two Gemini models back them, both via the `@google/genai` client keyed by
 `GOOGLE_AI_API_KEY` ([`src/lib/googleAI.ts`](src/lib/googleAI.ts)):
 
-- **Vision/action:** `gemini-1.5-flash-latest`
-- **Text chat:** `gemini-2.0-flash-lite`
+- **Vision/action:** `gemini-3.1-flash-lite` (override with `GOOGLE_VISION_MODEL`)
+- **Text chat:** `gemini-3.1-flash-lite` (override with `GOOGLE_TEXT_MODEL`)
 
 ### Vision + movement loop
 
@@ -259,7 +259,7 @@ the local user) it allocates an offscreen `PerspectiveCamera` and a `320×200`
 [`generateAiActionAndChat`](src/app/actions/generateMessage.ts) is the server
 side: it builds the agent's "newly-awakened, disoriented" persona prompt, calls
 Gemini with `responseMimeType: "application/json"` (`temperature 0.4`,
-`maxOutputTokens 150`), strips code fences, and validates the result against
+`maxOutputTokens 256`), strips code fences, and validates the result against
 `AIResponseSchema` (`{ chatMessage?, action }`). If there's a chat message it
 broadcasts it to the `EventHub` DO via the `EVENT_HUB` binding
 (`getCloudflareContext().env`) and returns the action. Pacing is the host's job:
@@ -270,8 +270,9 @@ returns as soon as Gemini does.
 
 [`useAiChat`](src/hooks/useAiChat.ts) (page-level) watches the chat. When the
 most recent message is from the human user, after a `1500–2500 ms` delay it asks
-**only the first agent** to reply via `generateAiChatMessage` (text-only,
-`gemini-2.0-flash-lite`) and broadcasts the result.
+**only the first agent** to reply via `generateAiChatMessage` (text-only) and
+broadcasts the result. The pending reply is keyed to the human message id, so
+agent chatter arriving in the meantime doesn't cancel it.
 
 ## Audio / TTS
 
@@ -329,14 +330,36 @@ Secrets (`GOOGLE_AI_API_KEY`, `GOOGLE_APP_CREDS_JSON`) are set with
 [`wrangler.jsonc`](wrangler.jsonc) `vars`. `NEXT_PUBLIC_TTS_ENABLED` is
 build-time (inlined by Next).
 
-| Variable                  | Required | Purpose                                           | Set via          | Default      |
-| ------------------------- | -------- | ------------------------------------------------- | ---------------- | ------------ |
-| `GOOGLE_AI_API_KEY`       | for AI   | Gemini client (text + vision).                    | secret           | —            |
-| `GOOGLE_APP_CREDS_JSON`   | for TTS  | Google Cloud service-account JSON for Chirp3 TTS. | secret           | —            |
-| `AI_AGENTS_CONFIG`        | no       | JSON array of `{ id, displayName }` agents.       | `wrangler.jsonc` | Orion + Nova |
-| `TOTAL_AGENTS`            | no       | How many agents get eye positions.                | `wrangler.jsonc` | `0`          |
-| `NUMBER_OF_BOXES`         | no       | Physics cubes to spawn.                           | `wrangler.jsonc` | `5`          |
-| `NEXT_PUBLIC_TTS_ENABLED` | no       | Set to `"false"` to disable TTS.                  | build-time env   | enabled      |
+| Variable                        | Required | Purpose                                                                | Set via          | Default                 |
+| ------------------------------- | -------- | ---------------------------------------------------------------------- | ---------------- | ----------------------- |
+| `GOOGLE_AI_API_KEY`             | for AI   | Gemini client (text + vision).                                         | secret           | —                       |
+| `GOOGLE_APP_CREDS_JSON`         | for TTS  | Google Cloud service-account JSON for Chirp3 TTS.                      | secret           | —                       |
+| `AI_AGENTS_CONFIG`              | no       | JSON array of `{ id, displayName }` agents.                            | `wrangler.jsonc` | Orion + Nova            |
+| `TOTAL_AGENTS`                  | no       | How many agents get eye positions.                                     | `wrangler.jsonc` | `0`                     |
+| `NUMBER_OF_BOXES`               | no       | Physics cubes to spawn.                                                | `wrangler.jsonc` | `5`                     |
+| `NEXT_PUBLIC_TTS_ENABLED`       | no       | Set to `"false"` to disable TTS.                                       | build-time env   | enabled                 |
+| `GOOGLE_TEXT_MODEL`             | no       | Gemini model for text chat.                                            | secret/env       | `gemini-3.1-flash-lite` |
+| `GOOGLE_VISION_MODEL`           | no       | Gemini model for the vision/action loop.                               | secret/env       | `gemini-3.1-flash-lite` |
+| `WORLD_WRITE_TOKEN`             | no       | Write gate: only bearers may POST events or invoke the Gemini actions. | secret           | open world              |
+| `NEXT_PUBLIC_WORLD_WRITE_TOKEN` | no       | The same token, inlined into trusted-writer client builds.             | build-time env   | —                       |
+| `RATE_LIMIT_AI_HOURLY`          | no       | Rolling one-hour budget for the billable Gemini actions (per isolate). | secret/env       | `2000`                  |
+| `RATE_LIMIT_TTS_HOURLY`         | no       | Rolling one-hour budget for TTS synthesis (per isolate).               | secret/env       | `240`                   |
+
+### Cost & write protection
+
+Server actions are anonymous POST RPCs, so the billable surfaces carry their
+own guards ([`src/lib/aiGuard.ts`](src/lib/aiGuard.ts),
+[`src/lib/worldAuth.ts`](src/lib/worldAuth.ts)):
+
+- With `WORLD_WRITE_TOKEN` set, the `EventHub` POST surface and the Gemini
+  actions require the bearer token; clients built with
+  `NEXT_PUBLIC_WORLD_WRITE_TOKEN` present it (via `postWorldEvent`, which falls
+  back from `sendBeacon` to a keepalive `fetch` because beacons cannot carry
+  the `Authorization` header). Everyone else is a read-only spectator.
+- Rolling one-hour budgets cap Gemini (`RATE_LIMIT_AI_HOURLY`) and TTS
+  (`RATE_LIMIT_TTS_HOURLY`) calls regardless of auth — in-memory
+  circuit-breakers, exact on a single server and best-effort per isolate on
+  Workers. TTS additionally allowlists voice names to the Chirp3 set.
 
 ## Build & deploy
 

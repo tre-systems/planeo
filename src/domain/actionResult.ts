@@ -8,8 +8,7 @@ export type ActionFailureReason =
   | "unavailable"; // feature disabled, or the upstream call/model failed
 
 export type ActionResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; reason: ActionFailureReason };
+  { ok: true; value: T } | { ok: false; reason: ActionFailureReason };
 
 export const actionOk = <T>(value: T): ActionResult<T> => ({
   ok: true,

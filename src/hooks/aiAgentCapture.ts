@@ -11,7 +11,7 @@ import type { Camera, Scene, WebGLRenderer, WebGLRenderTarget } from "three";
 // pixel buffer are allocated once and reused (captures are synchronous and
 // single-threaded, so sharing is safe).
 let scratchCanvas: HTMLCanvasElement | null = null;
-let scratchPixels: Uint8Array | null = null;
+let scratchPixels: Uint8Array<ArrayBuffer> | null = null;
 
 const getScratchCanvas = (): HTMLCanvasElement => {
   if (!scratchCanvas) {
@@ -22,7 +22,7 @@ const getScratchCanvas = (): HTMLCanvasElement => {
   return scratchCanvas;
 };
 
-const getScratchPixels = (): Uint8Array => {
+const getScratchPixels = (): Uint8Array<ArrayBuffer> => {
   if (!scratchPixels) {
     scratchPixels = new Uint8Array(CAPTURE_WIDTH * CAPTURE_HEIGHT * 4);
   }

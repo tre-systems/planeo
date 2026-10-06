@@ -57,5 +57,11 @@
     "vite": "^8.1.5",
     "vitest": "^4.1.8",
     "wrangler": "^4.97.0"
+  },
+  "overrides": {
+    "undici@^7": "7.29.1",
+    "brace-expansion@^1": "1.1.21",
+    "brace-expansion@^5": "5.0.12",
+    "source-map-js": "1.2.2"
   }
 }

@@ -415,6 +415,9 @@ stateDiagram-v2
 
 ## Domain schemas
 
+Zod 4 validates the shared contracts; ordinary objects strip unknown fields and
+validation failures retain the flattened form/field error envelope.
+
 [`src/domain/`](src/domain/) holds the Zod contracts: `aiAction` (the
 `move`/`turn`/`none` action union and the `AIResponse` the vision model must
 return — `turn` is clamped to 1–45°), `message`, `event` (the SSE union),

@@ -80,11 +80,3 @@ Prioritised, P1 (highest value) → P3. None are known bugs in shipped behavior.
 - **Re-add PWA.** There is no service worker today (the manifest alone doesn't
   make the app installable/offline-capable); a Workers-compatible service
   worker — e.g. via `vite-plugin-pwa` or Serwist — would restore that support.
-
-### Ops / hygiene
-
-- **Dependency bump.** `npm audit` flags 19 issues, but all are dev/build-tooling
-  transitive (eslint, playwright, wrangler, postcss toolchains) or non-exploitable
-  in our usage (the prod `uuid` finding needs a `buf` argument we never pass) —
-  none reach the deployed worker. Clear them on a deliberate `npm run deps:update`
-  pass rather than a risky 28-package `audit fix`.

@@ -55,6 +55,21 @@ describe("EventSchema", () => {
     // host without a hostId
     expect(EventSchema.safeParse({ type: "host" }).success).toBe(false);
   });
+
+  it("strips unknown fields without changing a valid wire event", () => {
+    expect(
+      EventSchema.parse({ type: "host", hostId: "client-1", extra: true }),
+    ).toEqual({ type: "host", hostId: "client-1" });
+  });
+
+  it("retains the flattened validation-error envelope", () => {
+    const result = EventSchema.safeParse({ type: "eyeUpdate", id: "", t });
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("Expected invalid event");
+    const details = result.error.flatten();
+    expect(details.formErrors).toEqual([]);
+    expect(details.fieldErrors).toMatchObject({ id: [expect.any(String)] });
+  });
 });
 
 describe("ValidatedEyeUpdatePayloadSchema", () => {

@@ -66,6 +66,16 @@ describe("AgentSelfStateSchema", () => {
     ).toBe(false);
   });
 
+  it("rejects oversized invalid action histories without expanding every issue", () => {
+    const result = AgentSelfStateSchema.safeParse({
+      ...base,
+      lastActions: Array.from({ length: 4096 }, () => ({ type: "unknown" })),
+    });
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("Expected oversized history rejection");
+    expect(result.error.issues.length).toBeLessThan(32);
+  });
+
   it("bounds headingDeg to -180..180 and requires an [x, z] pair", () => {
     expect(
       AgentSelfStateSchema.safeParse({ ...base, headingDeg: 200 }).success,
